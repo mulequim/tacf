@@ -309,11 +309,8 @@ else:
         
         st.header("Resultado da Avaliação")
         
-        # --- TABELA RESUMO GERAL ---
+                # --- TABELA RESUMO GERAL ---
         st.subheader("Resumo da Situação Geral")
-        
-        # Define a Situação Final
-        situacao_final = "APROVADO" if resultado_final == "APTO GERAL" else "REPROVADO"
         
         # Cria a tabela de resumo
         df_resumo = pd.DataFrame({
@@ -322,22 +319,30 @@ else:
             "Valor": ["-", f"{pontuacao_geral_final:.1f} Pts / 100 Pts"]
         })
         
+        # Define a Situação Final (A cor será baseada no Resultado da linha 0)
+        
         # Define a cor para a Situação Final
         def color_situacao(val):
-            color = 'background-color: #d4edda; color: black' if val == "APROVADO" else 'background-color: #f8d7da; color: black'
-            return color
+            # Val é o texto da célula (Resultado: APTO GERAL ou NÃO APTO GERAL)
+            if "APTO GERAL" in val:
+                return 'background-color: #d4edda; color: black'
+            elif "NÃO APTO GERAL" in val:
+                return 'background-color: #f8d7da; color: black'
+            return ''
         
+        # Aplicar o estilo diretamente na coluna 'Resultado'
         st.dataframe(
             df_resumo.style.applymap(
                 color_situacao,
-                subset=pd.Index([0], name='row'), # Aplica cor apenas na linha do STATUS GERAL
-                selector="td:nth-child(2)"
+                subset=pd.Index([0]), # Aplica na linha 0 (STATUS GERAL)
+                subset=['Resultado'] # Aplica na coluna 'Resultado'
             ),
             hide_index=True,
             use_container_width=True
         )
 
         st.markdown("---")
+
         
         # --- TABELA DE DESEMPENHO DETALHADO ---
         st.subheader("Desempenho Detalhado por Teste")
