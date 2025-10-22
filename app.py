@@ -4,9 +4,9 @@ import streamlit as st
 import pandas as pd
 from tacf_functions import (
     TRADUCAO_CAMPOS, 
-    DADOS_COMPLETOS_ANEXO_VII, # Apenas para o TACF GERAL, que se mantém
+    DADOS_COMPLETOS_ANEXO_VII, 
     calcular_resultado,
-    DADOS_INDICES, # Usado para os campos de entrada
+    DADOS_INDICES, 
     CONCEITUACAO_GLOBAL
 )
 
