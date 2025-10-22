@@ -78,11 +78,9 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     max_cintura_minimo = indices_minimos.get("C. Cintura") # Este é o valor MÁXIMO aceitável para aprovação
     res_cintura = resultados_candidato.get("C. Cintura", 999.0)
     if max_cintura_minimo is not None:
-        # Para C. Cintura, o "máximo" para aprovação é o valor mínimo da NSCA 54-4 (ex: 98.0 cm)
-        # E a nota máxima simulada deve ser um valor ainda menor (idealmente, um valor de referência de "excelente")
-        # Usaremos 5% abaixo do limite como "Nota Máxima" (o menor valor é o melhor)
-        max_cintura_simulado = round(max_cintura_minimo * 0.95, 1) # Ex: 98.0 * 0.95 = 93.1 cm
-        indices_referencia["C. Cintura"] = {"Mínimo": max_cintura_minimo, "Máximo": max_cintura_simulado} # Onde "Máximo" é o melhor resultado para C.Cintura
+        # Para C. Cintura, a "Nota Máxima" simulada é um valor menor (melhor)
+        max_cintura_simulado = round(max_cintura_minimo * 0.95, 1) # 5% abaixo do limite
+        indices_referencia["C. Cintura"] = {"Mínimo": max_cintura_minimo, "Máximo": max_cintura_simulado} # Onde "Máximo" é o melhor resultado simulado
         
         if res_cintura <= max_cintura_minimo:
             resultados_avaliacao["C. Cintura"] = "APTO"
@@ -93,33 +91,67 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     # Resultado final e Nota Geral
     resultado_final = "APTO GERAL" if aprovado_geral else "NÃO APTO GERAL"
     
-    # Lógica da Nota Geral Simulada (10)
-    atingiu_nota_maxima_simulada = True
+    # Lógica da Pontuação GERAL Simulada (usando 50% para Mínimo e 100% para Máximo Simulado)
+    pontuacao_total = 0
+    pontuacao_maxima_possivel = len(resultados_avaliacao) * 100.0
     
     for k, v in resultados_avaliacao.items():
         if v == "NÃO APTO":
-            atingiu_nota_maxima_simulada = False
-            break # Não precisa verificar mais
+            pontuacao_total += 0 # Zera o teste, reprova
+        else:
+            # Calcula a pontuação do teste (Linear entre 50 e 100)
+            referencias = indices_referencia[k]
+            ponto_min = referencias["Mínimo"]
+            ponto_max = referencias["Máximo"]
+            valor_candidato = resultados_candidato[k]
             
-        referencias = indices_referencia.get(k)
-        if referencias:
+            # Nota de 0 a 100 para o teste (50% é o Mínimo, 100% é o Máximo Simulado)
             if k == "C. Cintura":
-                # Para C. Cintura, o resultado deve ser MENOR ou IGUAL ao Máximo Simulado
-                if resultados_candidato[k] > referencias["Máximo"]:
-                    atingiu_nota_maxima_simulada = False
+                 # C. Cintura: O menor valor é o melhor. Inverte a lógica.
+                 # Se valor_candidato <= ponto_max (Máximo Simulado): 100 pontos
+                 # Se valor_candidato > ponto_min (Mínimo Aprovação): 0 pontos (na verdade, já é NÃO APTO)
+                 # Se o candidato está APTO, a nota vai de 50 a 100
+                 
+                 if valor_candidato <= ponto_max:
+                     pontuacao_teste = 100.0
+                 else:
+                     # Calcula a progressão de 50 a 100 entre ponto_max e ponto_min
+                     pontuacao_teste = 50.0 + (50.0 * (ponto_min - valor_candidato) / (ponto_min - ponto_max))
+                     pontuacao_teste = max(50.0, min(100.0, pontuacao_teste)) # Garante que fique entre 50 e 100
+                 
             else:
-                # Para exercícios (FEMS, FTSC, Corrida), o resultado deve ser MAIOR ou IGUAL ao Máximo Simulado
-                if resultados_candidato[k] < referencias["Máximo"]:
-                    atingiu_nota_maxima_simulada = False
-    
-    if atingiu_nota_maxima_simulada and aprovado_geral:
-        nota_geral = "APROVADO (Nota Máxima Simulada)"
-    elif aprovado_geral:
-        nota_geral = "APROVADO (Mínimo Atingido)"
-    else:
+                 # Exercícios: O maior valor é o melhor.
+                 # Se valor_candidato >= ponto_max (Máximo Simulado): 100 pontos
+                 # Se valor_candidato < ponto_min (Mínimo Aprovação): 0 pontos (na verdade, já é NÃO APTO)
+                 
+                 if valor_candidato >= ponto_max:
+                     pontuacao_teste = 100.0
+                 else:
+                     # Calcula a progressão de 50 a 100 entre ponto_min e ponto_max
+                     pontuacao_teste = 50.0 + (50.0 * (valor_candidato - ponto_min) / (ponto_max - ponto_min))
+                     pontuacao_teste = max(50.0, min(100.0, pontuacao_teste)) # Garante que fique entre 50 e 100
+        
+        # Armazena a pontuação individual e soma ao total
+        indices_referencia[k]["Pontuação Candidato"] = pontuacao_teste if v == "APTO" else 0.0
+        pontuacao_total += indices_referencia[k]["Pontuação Candidato"]
+
+    # Nota Geral Final
+    pontuacao_geral_final = pontuacao_total / len(resultados_avaliacao) if len(resultados_avaliacao) > 0 else 0.0
+
+    if resultado_final == "NÃO APTO GERAL":
+        pontuacao_geral_final = 0.0 # Pontuação zero se reprovado
+
+    # Lógica da Nota GERAL (Texto)
+    if resultado_final == "NÃO APTO GERAL":
         nota_geral = "REPROVADO"
+    elif pontuacao_geral_final >= 90:
+        nota_geral = "EXCELENTE (Nota Máxima Simulada)"
+    elif pontuacao_geral_final >= 70:
+        nota_geral = "BOM"
+    else:
+        nota_geral = "REGULAR (Mínimo Atingido)"
     
-    return resultado_final, nota_geral, resultados_avaliacao, indices_referencia, resultados_candidato
+    return resultado_final, nota_geral, pontuacao_geral_final, resultados_avaliacao, indices_referencia, resultados_candidato
 
 # --- Interface Streamlit ---
 
@@ -201,7 +233,7 @@ else:
     # --- CALCULAR DESEMPENHO TACF ANUAL SIMPLIFICADO ---
     
     st.header("Calcular Desempenho no TACF Anual (Simplificado)")
-    st.warning("⚠️ **AVISO: Base Normativa e Idade:** Esta ferramenta utiliza a **NSCA 54-4 (Exames de Admissão)**. Os índices mínimos **NÃO variam por Idade**. O cálculo de pontuação (Nota 10) é uma **Simulação**.")
+    st.warning("⚠️ **AVISO: Base Normativa e Idade:** Esta ferramenta utiliza a **NSCA 54-4 (Exames de Admissão)**. Os índices mínimos **NÃO variam por Idade**. A Pontuação Máxima/Geral e a Nota Final são **Simulações** para fins didáticos.")
     
     st.sidebar.header("2. Padrão e Idade")
     opcoes_exame = sorted(list(DADOS_INDICES.keys()))
@@ -273,75 +305,86 @@ else:
     
     if st.sidebar.button("Calcular Resultado do TACF"):
         # Execução do cálculo
-        resultado_final, nota_geral, resultados_avaliacao, indices_referencia, resultados_candidato = calcular_resultado(tipo_exame, resultados)
+        resultado_final, nota_geral, pontuacao_geral_final, resultados_avaliacao, indices_referencia, resultados_candidato = calcular_resultado(tipo_exame, resultados)
         
         st.header("Resultado da Avaliação")
         
-        # --- EXIBIÇÃO DA NOTA E STATUS GERAL ---
-        col1, col2, col3 = st.columns(3)
+        # --- TABELA RESUMO GERAL ---
+        st.subheader("Resumo da Situação Geral")
         
-        col1.metric("Padrão de Cálculo", tipo_exame)
-        col2.metric("Idade (Referência)", f"{idade_candidato} anos")
+        # Define a Situação Final
+        situacao_final = "APROVADO" if resultado_final == "APTO GERAL" else "REPROVADO"
         
-        if resultado_final == "APTO GERAL":
-            col3.success(f"**STATUS GERAL: {resultado_final}**")
-            st.balloons()
-        else:
-            col3.error(f"**STATUS GERAL: {resultado_final}**")
+        # Cria a tabela de resumo
+        df_resumo = pd.DataFrame({
+            "Critério": ["STATUS GERAL (Eliminatório)", "NOTA GERAL (Simulada)"],
+            "Resultado": [resultado_final, nota_geral],
+            "Valor": ["-", f"{pontuacao_geral_final:.1f} Pts / 100 Pts"]
+        })
+        
+        # Define a cor para a Situação Final
+        def color_situacao(val):
+            color = 'background-color: #d4edda; color: black' if val == "APROVADO" else 'background-color: #f8d7da; color: black'
+            return color
+        
+        st.dataframe(
+            df_resumo.style.applymap(
+                color_situacao,
+                subset=pd.Index([0], name='row'), # Aplica cor apenas na linha do STATUS GERAL
+                selector="td:nth-child(2)"
+            ),
+            hide_index=True,
+            use_container_width=True
+        )
 
         st.markdown("---")
         
-        st.subheader(f"Nota Final: {nota_geral}")
-        if nota_geral == "REPROVADO":
-            st.error("A reprovação em qualquer teste implica em 'NÃO APTO GERAL' (REPROVADO) no TACF.")
-        elif nota_geral == "APROVADO (Nota Máxima Simulada)":
-            st.success("Parabéns! Você atingiu o critério para a Nota Máxima Simulada.")
-        
-        st.markdown("---")
-        st.subheader("Desempenho por Teste")
+        # --- TABELA DE DESEMPENHO DETALHADO ---
+        st.subheader("Desempenho Detalhado por Teste")
         
         # Prepara a lista de resultados e índices para exibição
         display_data = []
         for k in ["FEMS", "FTSC", "Corrida 12 min", "C. Cintura"]:
             if k in resultados_avaliacao:
                 
-                valor_limite_min = indices_referencia[k]["Mínimo"]
-                valor_limite_max = indices_referencia[k]["Máximo"]
+                # Valores de Referência
+                min_aprovacao = indices_referencia[k]["Mínimo"]
+                max_simulado = indices_referencia[k]["Máximo"]
+                pontuacao_cand = indices_referencia[k]["Pontuação Candidato"]
                 valor_candidato = resultados_candidato.get(k)
                 avaliacao = resultados_avaliacao[k]
                 
-                # Unidade e Texto de Referência
+                # Unidade
                 if k == "C. Cintura":
                     unidade = "cm"
-                    limite_texto = f"Mín. Aprovação: ≤ {valor_limite_min} {unidade} | Máx. Simulada: ≤ {valor_limite_max} {unidade}"
-                    resultado_texto = f"{valor_candidato} {unidade}"
-                elif k == "Corrida 12 min":
-                    unidade = "m"
-                    limite_texto = f"Mín. Aprovação: ≥ {valor_limite_min} {unidade} | Máx. Simulada: ≥ {valor_limite_max} {unidade}"
-                    resultado_texto = f"{valor_candidato} {unidade}"
+                    min_texto = f"Máx: {min_aprovacao} {unidade}" # C. Cintura: Mínimo para ser APTO é o Máximo aceitável
+                    max_texto = f"Mín: {max_simulado} {unidade}" # C. Cintura: Mínimo para Nota Máxima é um valor menor
                 else:
-                    unidade = "repetições"
-                    limite_texto = f"Mín. Aprovação: ≥ {valor_limite_min} {unidade} | Máx. Simulada: ≥ {valor_limite_max} {unidade}"
-                    resultado_texto = f"{valor_candidato} {unidade}"
+                    unidade = "repetições" if k in ["FEMS", "FTSC"] else "m"
+                    min_texto = f"Mín: {min_aprovacao} {unidade}"
+                    max_texto = f"Máx: {max_simulado} {unidade}"
+                
                 
                 display_data.append({
                     "Teste": TRADUCAO_CAMPOS[k],
-                    "Resultado do Candidato": resultado_texto,
-                    "Referência (Simulada)": limite_texto,
-                    "Status": avaliacao
+                    "Pontuação do Candidato (Pts)": f"{pontuacao_cand:.1f}",
+                    "Pontuação Mínima (Aprovação)": min_texto,
+                    "Pontuação Máxima (Simulada)": max_texto,
+                    "Resultado do Candidato": f"{valor_candidato} {unidade}",
+                    "Situação": avaliacao
                 })
 
         df_resultados = pd.DataFrame(display_data)
         
-        # Cor da célula na tabela (usando estilo HTML/CSS para o Streamlit)
-        def color_status(val):
+        # Cor da célula na tabela
+        def color_status_detalhe(val):
             color = 'background-color: #d4edda; color: black' if val == 'APTO' else 'background-color: #f8d7da; color: black'
             return color
         
         st.dataframe(
             df_resultados.style.applymap(
-                color_status, 
-                subset=['Status']
+                color_status_detalhe, 
+                subset=['Situação']
             ),
             hide_index=True,
             use_container_width=True
@@ -349,5 +392,6 @@ else:
 
 st.markdown("---")
 st.caption("""
-    **[span_0](start_span)NOTA SOBRE A SIMULAÇÃO:** A **NSCA 54-4** (base desta calculadora) apenas define o índice mínimo ("APTO")[span_0](end_span). A coluna "Máx. Simulada" foi criada para fins didáticos, representando um desempenho 30% superior ao mínimo (ou 5% inferior ao máximo no caso da C. Cintura), **NÃO sendo um valor oficial do COMAER** para a nota 10.
+    **NOTA SOBRE PONTUAÇÃO E IDADE:** A **NSCA 54-4** (base desta calculadora) apenas define o índice mínimo ("APTO"). 
+    A **Pontuação GERAL, Pontuação Máxima e os conceitos de nota (REGULAR, BOM, EXCELENTE)** são **SIMULAÇÕES DIDÁTICAS** implementadas para atender sua necessidade de um sistema de notas, **NÃO sendo valores ou critérios oficiais do COMAER** (que utiliza a **NSCA 54-3** e considera a idade para pontuação).
 """)
