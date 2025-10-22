@@ -73,7 +73,7 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     
     # 1. FEMS (Flexão e Extensão dos Membros Superiores)
     min_fems = indices_minimos.get("FEMS")
-    res_fems = resultados_candidato["FEMS"]
+    res_fems = resultados_candidato.get("FEMS", 0) # Adiciona .get com default
     if min_fems is not None:
         if res_fems >= min_fems:
             resultados_avaliacao["FEMS"] = f"APTO ({res_fems} Repetições)"
@@ -83,7 +83,7 @@ def calcular_resultado(tipo_exame, resultados_candidato):
 
     # 2. FTSC (Flexão do Tronco Sobre as Coxas)
     min_ftsc = indices_minimos.get("FTSC")
-    res_ftsc = resultados_candidato["FTSC"]
+    res_ftsc = resultados_candidato.get("FTSC", 0)
     if min_ftsc is not None:
         if res_ftsc >= min_ftsc:
             resultados_avaliacao["FTSC"] = f"APTO ({res_ftsc} Repetições)"
@@ -93,7 +93,7 @@ def calcular_resultado(tipo_exame, resultados_candidato):
 
     # 3. SH (Salto Horizontal)
     min_sh = indices_minimos.get("SH")
-    res_sh = resultados_candidato["SH"]
+    res_sh = resultados_candidato.get("SH", 0.0)
     if min_sh is not None:
         if res_sh >= min_sh:
             resultados_avaliacao["SH"] = f"APTO ({res_sh} m)"
@@ -103,7 +103,7 @@ def calcular_resultado(tipo_exame, resultados_candidato):
 
     # 4. Corrida 12 min
     min_corrida = indices_minimos.get("Corrida 12 min")
-    res_corrida = resultados_candidato["Corrida 12 min"]
+    res_corrida = resultados_candidato.get("Corrida 12 min", 0)
     if min_corrida is not None:
         if res_corrida >= min_corrida:
             resultados_avaliacao["Corrida 12 min"] = f"APTO ({res_corrida} m)"
@@ -114,7 +114,7 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     # 5. Circunferência da Cintura (C. Cintura)
     # Importante: O índice é o MÁXIMO (<=).
     max_cintura = indices_minimos.get("C. Cintura")
-    res_cintura = resultados_candidato["C. Cintura"]
+    res_cintura = resultados_candidato.get("C. Cintura", 999.0) # Assume um valor alto para caso não seja preenchido
     if max_cintura is not None:
         if res_cintura <= max_cintura:
             resultados_avaliacao["C. Cintura"] = f"APTO ({res_cintura} cm)"
@@ -139,112 +139,182 @@ st.title("Avaliação do Teste de Condicionamento Físico (TACF) COMAER")
 st.subheader("Baseado na NSCA 54-4/2024 (Índices Mínimos de Aprovação)")
 st.markdown("---")
 
-# Seleção do Exame
-st.sidebar.header("1. Selecione o Exame/Estágio")
-opcoes_exame = sorted(list(DADOS_INDICES.keys()))
-tipo_exame = st.sidebar.selectbox(
-    "Tipo de Exame/Estágio",
-    opcoes_exame,
-    index=opcoes_exame.index("CFOAV, CFOINT, CFOINF, CFS, CFT e EAGS (M)") # Default
-)
+# --- Lógica do Menu ---
 
-st.sidebar.markdown("---")
-st.sidebar.header("2. Insira os Resultados")
-
-# Obter os índices mínimos para o exame selecionado (para saber quais testes solicitar)
-indices_necessarios = DADOS_INDICES[tipo_exame]
-
-resultados = {}
-
-# Campos de entrada de dados
-for teste_curto, min_valor in indices_necessarios.items():
-    if min_valor is not None:
-        label = TRADUCAO_CAMPOS[teste_curto]
-        
-        if teste_curto in ["FEMS", "FTSC"]:
-            # Repetições (número inteiro)
-            resultados[teste_curto] = st.sidebar.number_input(
-                label,
-                min_value=0,
-                value=min_valor,
-                step=1,
-                help=f"Mínimo exigido: {min_valor} repetições."
-            )
-        elif teste_curto == "Corrida 12 min":
-            # Distância em metros (número inteiro)
-            resultados[teste_curto] = st.sidebar.number_input(
-                label,
-                min_value=0,
-                value=min_valor,
-                step=10,
-                help=f"Mínimo exigido: {min_valor} metros."
-            )
-        elif teste_curto == "SH":
-            # Salto Horizontal (número decimal para metros)
-            # O documento usa '1,8 m' e '1,4 m', então usaremos float.
-            resultados[teste_curto] = st.sidebar.number_input(
-                label,
-                min_value=0.0,
-                value=min_valor,
-                step=0.1,
-                format="%.2f",
-                help=f"Mínimo exigido: {min_valor} metros."
-            )
-        elif teste_curto == "C. Cintura":
-            # Circunferência da Cintura (número decimal para cm)
-            # O documento usa '≤ 98,0 cm' e '≤ 89,0 cm'.
-            resultados[teste_curto] = st.sidebar.number_input(
-                label,
-                min_value=0.0,
-                value=min_valor - 1.0, # Valor um pouco abaixo do máximo para iniciar
-                step=0.1,
-                format="%.1f",
-                help=f"Máximo permitido: {min_valor} cm."
-            )
+st.sidebar.header("1. Seleção da Opção")
+opcoes_base = ["TACF GERAL (Tabelas de Índices)", "Calcular Desempenho em Exame Específico"]
+opcao_selecionada = st.sidebar.radio("Escolha a funcionalidade:", opcoes_base)
 
 st.sidebar.markdown("---")
 
-if st.sidebar.button("Calcular Resultado do TACF"):
-    # Execução do cálculo
-    resultado_final, resultados_avaliacao, indices_minimos = calcular_resultado(tipo_exame, resultados)
+if opcao_selecionada == "TACF GERAL (Tabelas de Índices)":
     
-    st.header("Resultado da Avaliação")
-    
-    # Exibir o resultado final
-    if resultado_final == "APTO":
-        st.success(f"**Resultado Final: {resultado_final}**")
-        st.balloons()
-    else:
-        st.error(f"**Resultado Final: {resultado_final}**")
-        st.warning("O candidato não atingiu o índice mínimo exigido em um ou mais testes. Lembre-se que o critério é *APTO* ou *NÃO APTO* (NSCA 54-4/2024).")
+    st.header("TACF GERAL: Tabela de Índices Mínimos por Exame")
+    st.markdown("Abaixo estão todos os índices mínimos de aprovação exigidos para os diferentes exames, cursos e estágios, conforme o Anexo VII da NSCA 54-4/2024.")
 
-    st.markdown("---")
-    st.subheader("Desempenho por Teste")
+    # Criar uma tabela completa com todos os dados
+    df_geral_m = []
+    df_geral_f = []
     
-    # Exibir o desempenho detalhado
-    df_resultados = pd.DataFrame({
-        "Teste": [TRADUCAO_CAMPOS.get(k) for k in resultados_avaliacao.keys()],
-        "Resultado do Candidato": [v.split(" ")[1] for v in resultados_avaliacao.values()],
-        "Índice Mínimo/Máximo": [
-            f"{indices_minimos.get(k)} " + ("cm" if k == "C. Cintura" else ("m" if k in ["SH", "Corrida 12 min"] else "repetições"))
-            for k in resultados_avaliacao.keys()
-        ],
-        "Avaliação": [v.split(" ")[0] for v in resultados_avaliacao.values()]
-    })
+    for nome_exame, indices in DADOS_INDICES.items():
+        if "(M)" in nome_exame:
+            df_geral_m.append({
+                "Exame/Estágio": nome_exame.replace(" (M)", ""),
+                TRADUCAO_CAMPOS["FEMS"]: indices["FEMS"] if indices["FEMS"] is not None else "-",
+                TRADUCAO_CAMPOS["FTSC"]: indices["FTSC"] if indices["FTSC"] is not None else "-",
+                TRADUCAO_CAMPOS["SH"]: indices["SH"] if indices["SH"] is not None else "-",
+                TRADUCAO_CAMPOS["Corrida 12 min"]: indices["Corrida 12 min"] if indices["Corrida 12 min"] is not None else "-",
+                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']}" if indices["C. Cintura"] is not None else "-",
+            })
+        elif "(F)" in nome_exame:
+            df_geral_f.append({
+                "Exame/Estágio": nome_exame.replace(" (F)", ""),
+                TRADUCAO_CAMPOS["FEMS"]: indices["FEMS"] if indices["FEMS"] is not None else "-",
+                TRADUCAO_CAMPOS["FTSC"]: indices["FTSC"] if indices["FTSC"] is not None else "-",
+                TRADUCAO_CAMPOS["SH"]: indices["SH"] if indices["SH"] is not None else "-",
+                TRADUCAO_CAMPOS["Corrida 12 min"]: indices["Corrida 12 min"] if indices["Corrida 12 min"] is not None else "-",
+                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']}" if indices["C. Cintura"] is not None else "-",
+            })
+
+    st.subheader("Índices Mínimos - Sexo MASCULINO")
+    st.dataframe(pd.DataFrame(df_geral_m), hide_index=True, use_container_width=True)
+
+    st.subheader("Índices Mínimos - Sexo FEMININO")
+    st.dataframe(pd.DataFrame(df_geral_f), hide_index=True, use_container_width=True)
+
+    st.caption("FEMS (Flexão e Extensão de Membros Superiores), FTSC (Flexão do Tronco Sobre as Coxas), SH (Salto Horizontal), C. Cintura (Circunferência da Cintura).")
     
-    # Cor da célula na tabela (usando estilo HTML/CSS para o Streamlit)
-    def color_status(val):
-        color = 'background-color: #d4edda' if val == 'APTO' else 'background-color: #f8d7da'
-        return color
+else:
+    # --- CALCULAR DESEMPENHO (Lógica anterior) ---
     
-    st.dataframe(
-        df_resultados.style.applymap(
-            color_status, 
-            subset=['Avaliação']
-        ),
-        hide_index=True,
-        use_container_width=True
+    st.header("Calcular Desempenho em Exame Específico")
+    
+    st.sidebar.header("2. Selecione o Exame/Estágio")
+    opcoes_exame = sorted(list(DADOS_INDICES.keys()))
+    tipo_exame = st.sidebar.selectbox(
+        "Selecione o Exame/Estágio para cálculo:",
+        opcoes_exame,
+        index=opcoes_exame.index("CFOAV, CFOINT, CFOINF, CFS, CFT e EAGS (M)") # Default
     )
+    
+    st.sidebar.markdown("---")
+    st.sidebar.header("3. Insira os Resultados")
+
+    # Obter os índices mínimos para o exame selecionado (para saber quais testes solicitar)
+    indices_necessarios = DADOS_INDICES[tipo_exame]
+
+    resultados = {}
+
+    # Campos de entrada de dados
+    for teste_curto, min_valor in indices_necessarios.items():
+        if min_valor is not None:
+            label = TRADUCAO_CAMPOS[teste_curto]
+            
+            # Determina o valor inicial para o input
+            initial_value = min_valor
+            if teste_curto == "C. Cintura":
+                initial_value = min_valor - 1.0 # Para começar no "apto"
+            elif teste_curto == "SH":
+                initial_value = float(min_valor)
+            elif teste_curto in ["FEMS", "FTSC", "Corrida 12 min"]:
+                 initial_value = int(min_valor)
+            
+            
+            if teste_curto in ["FEMS", "FTSC"]:
+                # Repetições (número inteiro)
+                resultados[teste_curto] = st.sidebar.number_input(
+                    label,
+                    min_value=0,
+                    value=initial_value,
+                    step=1,
+                    help=f"Mínimo exigido: {min_valor} repetições."
+                )
+            elif teste_curto == "Corrida 12 min":
+                # Distância em metros (número inteiro)
+                resultados[teste_curto] = st.sidebar.number_input(
+                    label,
+                    min_value=0,
+                    value=initial_value,
+                    step=10,
+                    help=f"Mínimo exigido: {min_valor} metros."
+                )
+            elif teste_curto == "SH":
+                # Salto Horizontal (número decimal para metros)
+                resultados[teste_curto] = st.sidebar.number_input(
+                    label,
+                    min_value=0.0,
+                    value=initial_value,
+                    step=0.1,
+                    format="%.2f",
+                    help=f"Mínimo exigido: {min_valor} metros."
+                )
+            elif teste_curto == "C. Cintura":
+                # Circunferência da Cintura (número decimal para cm)
+                resultados[teste_curto] = st.sidebar.number_input(
+                    label,
+                    min_value=0.0,
+                    value=initial_value,
+                    step=0.1,
+                    format="%.1f",
+                    help=f"Máximo permitido: {min_valor} cm."
+                )
+        
+    st.sidebar.markdown("---")
+    
+    if st.sidebar.button("Calcular Resultado do TACF"):
+        # Execução do cálculo
+        resultado_final, resultados_avaliacao, indices_minimos = calcular_resultado(tipo_exame, resultados)
+        
+        st.header("Resultado da Avaliação")
+        
+        # Exibir o resultado final
+        if resultado_final == "APTO":
+            st.success(f"**Resultado Final: {resultado_final}**")
+            st.balloons()
+        else:
+            st.error(f"**Resultado Final: {resultado_final}**")
+            st.warning("O candidato não atingiu o índice mínimo exigido em um ou mais testes. Lembre-se que o critério é *APTO* ou *NÃO APTO* (NSCA 54-4/2024).")
+
+        st.markdown("---")
+        st.subheader("Desempenho por Teste")
+        
+        # Prepara a lista de resultados do candidato
+        resultados_candidato_display = {}
+        for k in resultados_avaliacao.keys():
+            valor_texto = resultados_avaliacao[k].split(" ")[1] # Ex: (26
+            valor_limpo = valor_texto.replace("(", "").replace(")", "")
+            resultados_candidato_display[k] = valor_limpo
+        
+        # Prepara a lista de índices
+        indices_minimos_display = {}
+        for k, v in indices_minimos.items():
+            if v is not None:
+                unidade = "cm" if k == "C. Cintura" else ("m" if k == "SH" else ("m" if k == "Corrida 12 min" else "repetições"))
+                prefixo = "Máx: " if k == "C. Cintura" else "Mín: "
+                indices_minimos_display[k] = f"{prefixo}{v} {unidade}"
+        
+        
+        # Cria o DataFrame para exibição
+        df_resultados = pd.DataFrame({
+            "Teste": [TRADUCAO_CAMPOS.get(k) for k in resultados_avaliacao.keys()],
+            "Resultado do Candidato": [resultados_candidato_display[k] for k in resultados_avaliacao.keys()],
+            "Índice de Referência": [indices_minimos_display[k] for k in resultados_avaliacao.keys()],
+            "Avaliação": [v.split(" ")[0] for v in resultados_avaliacao.values()]
+        })
+        
+        # Cor da célula na tabela (usando estilo HTML/CSS para o Streamlit)
+        def color_status(val):
+            color = 'background-color: #d4edda; color: black' if val == 'APTO' else 'background-color: #f8d7da; color: black'
+            return color
+        
+        st.dataframe(
+            df_resultados.style.applymap(
+                color_status, 
+                subset=['Avaliação']
+            ),
+            hide_index=True,
+            use_container_width=True
+        )
 
 st.markdown("---")
 st.caption("""
