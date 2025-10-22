@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 # Dados dos índices mínimos de aprovação (Simplificados para "TACF Anual" - Baseado nos menores índices do EAOS/EIOS da NSCA 54-4 e incluindo a Circunferência da Cintura do EAT/EIT)
+# NOTA: Estes índices são de APTO MÍNIMO e NÃO variam por IDADE na NSCA 54-4.
 DADOS_INDICES = {
     # Usando índices do EAOS/EIOS + C. Cintura do EAT/EIT (Grad. Ed. Física)
     "TACF ANUAL MASCULINO (Base EAOS/EIOS)": {
@@ -24,7 +26,7 @@ TRADUCAO_CAMPOS = {
 def calcular_resultado(tipo_exame, resultados_candidato):
     """
     Calcula se o candidato está APTO ou NÃO APTO com base nos índices mínimos.
-    Também calcula a Nota Máxima Simulada.
+    Também calcula a Nota Máxima Simulada e a Pontuação Geral.
     """
     indices_minimos = DADOS_INDICES.get(tipo_exame, {})
     resultados_avaliacao = {}
@@ -36,120 +38,84 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     # Fator de Simulação para "Nota Máxima" (30% acima do mínimo para exercícios)
     FATOR_MAXIMO_SIMULADO = 1.3
     
+    # Pontuação Total
+    pontuacao_total = 0.0
+    pontuacao_maxima_possivel = 0.0
+    
     # Processamento dos testes
     
-    # 1. FEMS (Flexão e Extensão dos Membros Superiores)
-    min_fems = indices_minimos.get("FEMS")
-    res_fems = resultados_candidato.get("FEMS", 0)
-    if min_fems is not None:
-        max_fems = int(min_fems * FATOR_MAXIMO_SIMULADO)
-        indices_referencia["FEMS"] = {"Mínimo": min_fems, "Máximo": max_fems}
-        if res_fems >= min_fems:
-            resultados_avaliacao["FEMS"] = "APTO" 
-        else:
-            resultados_avaliacao["FEMS"] = "NÃO APTO"
-            aprovado_geral = False
-
-    # 2. FTSC (Flexão do Tronco Sobre as Coxas)
-    min_ftsc = indices_minimos.get("FTSC")
-    res_ftsc = resultados_candidato.get("FTSC", 0)
-    if min_ftsc is not None:
-        max_ftsc = int(min_ftsc * FATOR_MAXIMO_SIMULADO)
-        indices_referencia["FTSC"] = {"Mínimo": min_ftsc, "Máximo": max_ftsc}
-        if res_ftsc >= min_ftsc:
-            resultados_avaliacao["FTSC"] = "APTO"
-        else:
-            resultados_avaliacao["FTSC"] = "NÃO APTO"
-            aprovado_geral = False
-
-    # 3. Corrida 12 min
-    min_corrida = indices_minimos.get("Corrida 12 min")
-    res_corrida = resultados_candidato.get("Corrida 12 min", 0)
-    if min_corrida is not None:
-        max_corrida = int(min_corrida * FATOR_MAXIMO_SIMULADO)
-        indices_referencia["Corrida 12 min"] = {"Mínimo": min_corrida, "Máximo": max_corrida}
-        if res_corrida >= min_corrida:
-            resultados_avaliacao["Corrida 12 min"] = "APTO"
-        else:
-            resultados_avaliacao["Corrida 12 min"] = "NÃO APTO"
-            aprovado_geral = False
+    for teste_curto, min_valor in indices_minimos.items():
+        if min_valor is None:
+            continue
             
-    # 4. Circunferência da Cintura (C. Cintura)
-    max_cintura_minimo = indices_minimos.get("C. Cintura") # Este é o valor MÁXIMO aceitável para aprovação
-    res_cintura = resultados_candidato.get("C. Cintura", 999.0)
-    if max_cintura_minimo is not None:
-        # Para C. Cintura, a "Nota Máxima" simulada é um valor menor (melhor)
-        max_cintura_simulado = round(max_cintura_minimo * 0.95, 1) # 5% abaixo do limite
-        indices_referencia["C. Cintura"] = {"Mínimo": max_cintura_minimo, "Máximo": max_cintura_simulado} # Onde "Máximo" é o melhor resultado simulado
+        pontuacao_maxima_possivel += 100.0
+        valor_candidato = resultados_candidato.get(teste_curto, 0.0 if teste_curto == "C. Cintura" else 0)
         
-        if res_cintura <= max_cintura_minimo:
-            resultados_avaliacao["C. Cintura"] = "APTO"
+        # Define Mínimo e Máximo Simulado
+        if teste_curto == "C. Cintura":
+            min_aprovacao = min_valor # Mínimo para APTO é o Máximo aceitável
+            max_simulado = round(min_aprovacao * 0.95, 1) # Mínimo para Nota Máxima (5% abaixo)
         else:
-            resultados_avaliacao["C. Cintura"] = "NÃO APTO"
-            aprovado_geral = False
+            min_aprovacao = min_valor
+            max_simulado = int(min_aprovacao * FATOR_MAXIMO_SIMULADO)
             
-    # Resultado final e Nota Geral
+        indices_referencia[teste_curto] = {"Mínimo": min_aprovacao, "Máximo": max_simulado, "Pontuação Candidato": 0.0}
+        
+        # 1. Avaliação APTO/NÃO APTO (Critério Eliminatório)
+        if teste_curto == "C. Cintura":
+            if valor_candidato <= min_aprovacao:
+                resultados_avaliacao[teste_curto] = "APTO"
+            else:
+                resultados_avaliacao[teste_curto] = "NÃO APTO"
+                aprovado_geral = False
+        else:
+            if valor_candidato >= min_aprovacao:
+                resultados_avaliacao[teste_curto] = "APTO"
+            else:
+                resultados_avaliacao[teste_curto] = "NÃO APTO"
+                aprovado_geral = False
+        
+        # 2. Cálculo da Pontuação Individual (Se for APTO)
+        if resultados_avaliacao[teste_curto] == "APTO":
+            ponto_min = min_aprovacao
+            ponto_max = max_simulado
+            
+            if teste_curto == "C. Cintura":
+                # C. Cintura: Menor valor é melhor. Pontuação de 50 (Mínimo) a 100 (Máximo Simulado)
+                if valor_candidato <= ponto_max:
+                    pontuacao_teste = 100.0
+                else:
+                    # Calcula a progressão linear de 50 a 100
+                    pontuacao_teste = 50.0 + (50.0 * (ponto_min - valor_candidato) / (ponto_min - ponto_max))
+                    pontuacao_teste = max(50.0, min(100.0, pontuacao_teste))
+            else:
+                # Exercícios: Maior valor é melhor. Pontuação de 50 (Mínimo) a 100 (Máximo Simulado)
+                if valor_candidato >= ponto_max:
+                    pontuacao_teste = 100.0
+                else:
+                    # Calcula a progressão linear de 50 a 100
+                    pontuacao_teste = 50.0 + (50.0 * (valor_candidato - ponto_min) / (ponto_max - ponto_min))
+                    pontuacao_teste = max(50.0, min(100.0, pontuacao_teste))
+
+            indices_referencia[teste_curto]["Pontuação Candidato"] = pontuacao_teste
+            pontuacao_total += pontuacao_teste
+
+    # 3. Resultado Final e Nota Geral
     resultado_final = "APTO GERAL" if aprovado_geral else "NÃO APTO GERAL"
     
-    # Lógica da Pontuação GERAL Simulada (usando 50% para Mínimo e 100% para Máximo Simulado)
-    pontuacao_total = 0
-    pontuacao_maxima_possivel = len(resultados_avaliacao) * 100.0
-    
-    for k, v in resultados_avaliacao.items():
-        if v == "NÃO APTO":
-            pontuacao_total += 0 # Zera o teste, reprova
-        else:
-            # Calcula a pontuação do teste (Linear entre 50 e 100)
-            referencias = indices_referencia[k]
-            ponto_min = referencias["Mínimo"]
-            ponto_max = referencias["Máximo"]
-            valor_candidato = resultados_candidato[k]
-            
-            # Nota de 0 a 100 para o teste (50% é o Mínimo, 100% é o Máximo Simulado)
-            if k == "C. Cintura":
-                 # C. Cintura: O menor valor é o melhor. Inverte a lógica.
-                 # Se valor_candidato <= ponto_max (Máximo Simulado): 100 pontos
-                 # Se valor_candidato > ponto_min (Mínimo Aprovação): 0 pontos (na verdade, já é NÃO APTO)
-                 # Se o candidato está APTO, a nota vai de 50 a 100
-                 
-                 if valor_candidato <= ponto_max:
-                     pontuacao_teste = 100.0
-                 else:
-                     # Calcula a progressão de 50 a 100 entre ponto_max e ponto_min
-                     pontuacao_teste = 50.0 + (50.0 * (ponto_min - valor_candidato) / (ponto_min - ponto_max))
-                     pontuacao_teste = max(50.0, min(100.0, pontuacao_teste)) # Garante que fique entre 50 e 100
-                 
-            else:
-                 # Exercícios: O maior valor é o melhor.
-                 # Se valor_candidato >= ponto_max (Máximo Simulado): 100 pontos
-                 # Se valor_candidato < ponto_min (Mínimo Aprovação): 0 pontos (na verdade, já é NÃO APTO)
-                 
-                 if valor_candidato >= ponto_max:
-                     pontuacao_teste = 100.0
-                 else:
-                     # Calcula a progressão de 50 a 100 entre ponto_min e ponto_max
-                     pontuacao_teste = 50.0 + (50.0 * (valor_candidato - ponto_min) / (ponto_max - ponto_min))
-                     pontuacao_teste = max(50.0, min(100.0, pontuacao_teste)) # Garante que fique entre 50 e 100
-        
-        # Armazena a pontuação individual e soma ao total
-        indices_referencia[k]["Pontuação Candidato"] = pontuacao_teste if v == "APTO" else 0.0
-        pontuacao_total += indices_referencia[k]["Pontuação Candidato"]
-
-    # Nota Geral Final
-    pontuacao_geral_final = pontuacao_total / len(resultados_avaliacao) if len(resultados_avaliacao) > 0 else 0.0
-
     if resultado_final == "NÃO APTO GERAL":
-        pontuacao_geral_final = 0.0 # Pontuação zero se reprovado
-
-    # Lógica da Nota GERAL (Texto)
-    if resultado_final == "NÃO APTO GERAL":
+        pontuacao_geral_final = 0.0
         nota_geral = "REPROVADO"
-    elif pontuacao_geral_final >= 90:
-        nota_geral = "EXCELENTE (Nota Máxima Simulada)"
-    elif pontuacao_geral_final >= 70:
-        nota_geral = "BOM"
     else:
-        nota_geral = "REGULAR (Mínimo Atingido)"
+        # Média da pontuação dos testes (Máximo 100 Pts)
+        pontuacao_geral_final = pontuacao_total / len(resultados_avaliacao) if len(resultados_avaliacao) > 0 else 0.0
+        
+        if pontuacao_geral_final >= 90:
+            nota_geral = "EXCELENTE (Nota Máxima Simulada)"
+        elif pontuacao_geral_final >= 70:
+            nota_geral = "BOM"
+        else:
+            nota_geral = "REGULAR (Mínimo Atingido)"
     
     return resultado_final, nota_geral, pontuacao_geral_final, resultados_avaliacao, indices_referencia, resultados_candidato
 
@@ -309,7 +275,7 @@ else:
         
         st.header("Resultado da Avaliação")
         
-                # --- TABELA RESUMO GERAL ---
+        # --- TABELA RESUMO GERAL ---
         st.subheader("Resumo da Situação Geral")
         
         # Cria a tabela de resumo
@@ -318,8 +284,6 @@ else:
             "Resultado": [resultado_final, nota_geral],
             "Valor": ["-", f"{pontuacao_geral_final:.1f} Pts / 100 Pts"]
         })
-        
-        # Define a Situação Final (A cor será baseada no Resultado da linha 0)
         
         # Define a cor para a Situação Final
         def color_situacao(val):
@@ -330,19 +294,18 @@ else:
                 return 'background-color: #f8d7da; color: black'
             return ''
         
-        # Aplicar o estilo diretamente na coluna 'Resultado'
+        # Aplicar o estilo SOMENTE à célula na linha de índice 0 (STATUS GERAL) e coluna 'Resultado'
         st.dataframe(
             df_resumo.style.applymap(
                 color_situacao,
-                subset=pd.Index([0]), # Aplica na linha 0 (STATUS GERAL)
-                subset=['Resultado'] # Aplica na coluna 'Resultado'
+                # CORREÇÃO: Usa uma tupla (linhas, colunas) para o subset
+                subset=([0], ['Resultado'])
             ),
             hide_index=True,
             use_container_width=True
         )
 
         st.markdown("---")
-
         
         # --- TABELA DE DESEMPENHO DETALHADO ---
         st.subheader("Desempenho Detalhado por Teste")
