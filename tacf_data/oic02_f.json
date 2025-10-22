@@ -1,0 +1,30 @@
+{
+  "≤ 29": {
+    "I": 16,
+    "S_upper": 17,
+    "B_upper": 25,
+    "MB_upper": 34,
+    "E_upper": 35
+  },
+  "30-40": {
+    "I": 14,
+    "S_upper": 15,
+    "B_upper": 24,
+    "MB_upper": 33,
+    "E_upper": 34
+  },
+  "41-44": {
+    "I": 13,
+    "S_upper": 14,
+    "B_upper": 18,
+    "MB_upper": 27,
+    "E_upper": 28
+  },
+  "≥ 45": {
+    "I": 9,
+    "S_upper": 10,
+    "B_upper": 16,
+    "MB_upper": 24,
+    "E_upper": 25
+  }
+}

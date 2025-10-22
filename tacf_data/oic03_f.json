@@ -1,0 +1,37 @@
+{
+  "≤ 23": {
+    "I": 29,
+    "S_upper": 30,
+    "B_upper": 39,
+    "MB_upper": 49,
+    "E_upper": 50
+  },
+  "24-25": {
+    "I": 28,
+    "S_upper": 29,
+    "B_upper": 38,
+    "MB_upper": 47,
+    "E_upper": 56
+  },
+  "26-28": {
+    "I": 26,
+    "S_upper": 27,
+    "B_upper": 36,
+    "MB_upper": 46,
+    "E_upper": 55
+  },
+  "29-30": {
+    "I": 24,
+    "S_upper": 25,
+    "B_upper": 34,
+    "MB_upper": 44,
+    "E_upper": 53
+  },
+  "31-34": {
+    "I": 20,
+    "S_upper": 21,
+    "B_upper": 31,
+    "MB_upper": 41,
+    "E_upper": 52
+  }
+}
