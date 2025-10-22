@@ -1,140 +1,167 @@
 # tacf_functions.py
 
-# Dados dos índices mínimos de aprovação (Simplificados para "TACF Anual" - Baseado nos menores índices do EAOS/EIOS da NSCA 54-4 e incluindo a Circunferência da Cintura do EAT/EIT)
-# NOTA: Estes índices são de APTO MÍNIMO e NÃO variam por IDADE na NSCA 54-4.
-DADOS_INDICES = {
-    # Usando índices do EAOS/EIOS + C. Cintura do EAT/EIT (Grad. Ed. Física)
-    "TACF ANUAL MASCULINO (Base EAOS/EIOS)": {
-        "FEMS": 11, "FTSC": 20, "SH": None, "Corrida 12 min": 1890, "C. Cintura": 98.0 
-    },
-    "TACF ANUAL FEMININO (Base EAOS/EIOS)": {
-        "FEMS": 9, "FTSC": 11, "SH": None, "Corrida 12 min": 1540, "C. Cintura": 89.0
-    },
-}
+# DADOS OFICIAIS NSCA 54-3 (TACF ANUAL DO EFETIVO)
+# NOTA: O dicionário completo com todas as faixas etárias/alturas é extenso.
+# Incluiremos APENAS um pequeno exemplo de dados e a estrutura de busca.
 
-# Tradução dos campos para exibição
 TRADUCAO_CAMPOS = {
+    "C. Cintura": "Circunferência da Cintura (cm)",
     "FEMS": "Flexão e Extensão dos M. Superiores (Repetições)",
     "FTSC": "Flexão do Tronco Sobre as Coxas (Repetições)",
-    "SH": "Salto Horizontal (Metros)",
     "Corrida 12 min": "Corrida 12 Minutos (Metros)",
-    "C. Cintura": "Circunferência da Cintura (cm)",
 }
 
-# Dados Completos para a Tabela Geral (Exibição)
-DADOS_COMPLETOS_ANEXO_VII = {
-    # --- MASCULINO ---
-    "CFOAV, CFOINT, CFOINF, CFS, CFT e EAGS (M)": {"FEMS": 26, "FTSC": 42, "SH": 1.8, "Corrida 12 min": 2250, "C. Cintura": None},
-    "CAMAR, CADAR, CAFAR, EAOEAR, EAOT, CFOE, EIAC e EAOAP (M)": {"FEMS": 21, "FTSC": 34, "SH": None, "Corrida 12 min": 2200, "C. Cintura": None},
-    "CPCAR (M)": {"FEMS": 21, "FTSC": 38, "SH": None, "Corrida 12 min": 2050, "C. Cintura": None},
-    "EAOF (M)": {"FEMS": 17, "FTSC": 27, "SH": None, "Corrida 12 min": 2050, "C. Cintura": None},
-    "EAT e EIT (Grad. Ed. Física) e EIT (Seg. e Defesa) (M)": {"FEMS": 19, "FTSC": 35, "SH": None, "Corrida 12 min": 2100, "C. Cintura": 98.0},
-    "EAT, EIT, EAS, EIS, EAP, EIP e EAP CB (M)": {"FEMS": 13, "FTSC": 25, "SH": None, "Corrida 12 min": 1900, "C. Cintura": None},
-    "EAOS e EIOS (M)": {"FEMS": 11, "FTSC": 20, "SH": None, "Corrida 12 min": 1890, "C. Cintura": None},
-    # --- FEMININO ---
-    "CFOAV, CFOINT, CFOINF, CFS, CFT e EAGS (F)": {"FEMS": 16, "FTSC": 34, "SH": 1.4, "Corrida 12 min": 1850, "C. Cintura": None},
-    "CAMAR, CADAR, CAFAR, EAOEAR, EAOT, CFOE, EIAC e EAOAP (F)": {"FEMS": 12, "FTSC": 29, "SH": None, "Corrida 12 min": 1650, "C. Cintura": None},
-    "CPCAR (F)": {"FEMS": 13, "FTSC": 30, "SH": None, "Corrida 12 min": 1650, "C. Cintura": None},
-    "EAOF (F)": {"FEMS": 17, "FTSC": 18, "SH": None, "Corrida 12 min": 1650, "C. Cintura": None},
-    "EAT e EIT (Grad. Ed. Física) (F)": {"FEMS": 17, "FTSC": 31, "SH": None, "Corrida 12 min": 1710, "C. Cintura": 89.0},
-    "EAT, EIT, EAS, EIS, EAP, EIP e EAP CB (F)": {"FEMS": 9, "FTSC": 15, "SH": None, "Corrida 12 min": 1600, "C. Cintura": None},
-    "EAOS e EIOS (F)": {"FEMS": 9, "FTSC": 11, "SH": None, "Corrida 12 min": 1540, "C. Cintura": None},
+# Estrutura para os testes de resistência (dependem de IDADE)
+# Exemplo de dados: OIC 02 - MASCULINO (Baseado nas repetições e Faixa Etária)
+# Formato: {Faixa Etária: {Pontos: Valor Mínimo para Pontuação}}
+OIC_02_MASCULINO_PONTOS = {
+    "≤ 20": {0.0: 24, 2.0: 25, 10.0: 60}, # Exemplo: 25 rep = 2.0 pts
+    "21-30": {0.0: 21, 2.0: 22, 10.0: 58},
+    "31-34": {0.0: 19, 2.0: 20, 10.0: 55},
+    # ... aqui viriam todas as outras faixas etárias
 }
 
+# Estrutura para C. Cintura (depende de ALTURA e valor MEDIDO)
+# Exemplo de dados: OIC 01 - MASCULINO (Baseado na Circunferência e Estatura)
+# Formato: {Estatura: {Circunferência: Pontos}}
+OIC_01_MASCULINO_PONTOS = {
+    "≤ 166": {99.0: 0.0, 98.5: 6.0, 82.5: 30.0}, # Exemplo: 98.5 cm = 6.0 pts
+    "172-175": {99.0: 0.0, 98.5: 6.0, 87.5: 18.4, 86.5: 21.0, 85.0: 25.5, 82.5: 30.0},
+    # ... aqui viriam todas as outras faixas de altura
+}
 
-def calcular_resultado(tipo_exame, resultados_candidato):
-    """
-    Calcula se o candidato está APTO ou NÃO APTO com base nos índices mínimos.
-    Também calcula a Nota Máxima Simulada e a Pontuação Geral.
-    """
-    indices_minimos = DADOS_INDICES.get(tipo_exame, {})
-    resultados_avaliacao = {}
-    aprovado_geral = True
-    
-    # Dicionários para armazenar os índices de Referência (Mínimo e Máximo Simulado)
-    indices_referencia = {}
-    
-    # Fator de Simulação para "Nota Máxima" (30% acima do mínimo para exercícios)
-    FATOR_MAXIMO_SIMULADO = 1.3
-    
-    # Pontuação Total
-    pontuacao_total = 0.0
-    pontuacao_maxima_possivel = 0.0
-    
-    # Processamento dos testes
-    
-    for teste_curto, min_valor in indices_minimos.items():
-        if min_valor is None:
-            continue
-            
-        pontuacao_maxima_possivel += 100.0
-        # Use .get() para valores numéricos e forneça um valor padrão apropriado (0 ou 0.0)
-        valor_candidato = resultados_candidato.get(teste_curto, 0.0 if teste_curto == "C. Cintura" else 0) 
-        
-        # 1. Define Mínimo e Máximo Simulado
-        if teste_curto == "C. Cintura":
-            min_aprovacao = min_valor 
-            max_simulado = round(min_aprovacao * 0.95, 1) # Mínimo para Nota Máxima (5% abaixo)
-        else:
-            min_aprovacao = min_valor
-            max_simulado = int(min_aprovacao * FATOR_MAXIMO_SIMULADO)
-            
-        indices_referencia[teste_curto] = {"Mínimo": min_aprovacao, "Máximo": max_simulado, "Pontuação Candidato": 0.0}
-        
-        # 2. Avaliação APTO/NÃO APTO (Critério Eliminatório)
-        if teste_curto == "C. Cintura":
-            if valor_candidato <= min_aprovacao:
-                resultados_avaliacao[teste_curto] = "APTO"
-            else:
-                resultados_avaliacao[teste_curto] = "NÃO APTO"
-                aprovado_geral = False
-        else:
-            if valor_candidato >= min_aprovacao:
-                resultados_avaliacao[teste_curto] = "APTO"
-            else:
-                resultados_avaliacao[teste_curto] = "NÃO APTO"
-                aprovado_geral = False
-        
-        # 3. Cálculo da Pontuação Individual (Se for APTO)
-        if resultados_avaliacao[teste_curto] == "APTO":
-            ponto_min = min_aprovacao
-            ponto_max = max_simulado
-            
-            if teste_curto == "C. Cintura":
-                # C. Cintura: Menor valor é melhor. Pontuação de 50 (Mínimo) a 100 (Máximo Simulado)
-                if valor_candidato <= ponto_max:
-                    pontuacao_teste = 100.0
-                else:
-                    # Calcula a progressão linear de 50 a 100
-                    pontuacao_teste = 50.0 + (50.0 * (ponto_min - valor_candidato) / (ponto_min - ponto_max))
-                    pontuacao_teste = max(50.0, min(100.0, pontuacao_teste))
-            else:
-                # Exercícios: Maior valor é melhor. Pontuação de 50 (Mínimo) a 100 (Máximo Simulado)
-                if valor_candidato >= ponto_max:
-                    pontuacao_teste = 100.0
-                else:
-                    # Calcula a progressão linear de 50 a 100
-                    pontuacao_teste = 50.0 + (50.0 * (valor_candidato - ponto_min) / (ponto_max - ponto_min))
-                    pontuacao_teste = max(50.0, min(100.0, pontuacao_teste))
+# Critérios para Apreciação de Suficiência (Conceituação Global)
+CONCEITUACAO_GLOBAL = {
+    "E": [90.0, 100.0],  # Excelente
+    "MB": [70.0, 89.9], # Muito Bom
+    "B": [40.0, 69.9],  # Bom
+    "S": [20.0, 39.9],  # Satisfatório
+    "I": [0.0, 19.9],   # Insatisfatório
+}
 
-            indices_referencia[teste_curto]["Pontuação Candidato"] = pontuacao_teste
-            pontuacao_total += pontuacao_teste
+# Critérios para APTO/NÃO APTO (Mínimo em "Satisfatório")
+# A pontuação MÍNIMA para APTO é 20.0 (Grau Final) E Satisfatório (S) em TODOS os OIC.
+PONTUACAO_MINIMA_APROVACAO = 20.0
 
-    # 4. Resultado Final e Nota Geral
-    resultado_final = "APTO GERAL" if aprovado_geral else "NÃO APTO GERAL"
-    
-    if resultado_final == "NÃO APTO GERAL":
-        pontuacao_geral_final = 0.0
-        nota_geral = "REPROVADO"
+# --- FUNÇÕES DE BUSCA ---
+
+def get_faixa_etaria(idade, sexo):
+    """Função de exemplo para obter a faixa etária correta para os testes."""
+    # Como as faixas etárias variam por teste, simplificaremos aqui para fins de demonstração
+    # Em um sistema completo, essa lógica seria complexa.
+    if sexo == "Masculino":
+        if idade <= 30: return "21-30"
+        if idade <= 38: return "35-38"
+        if idade >= 53: return "≥ 53"
+        return "Faixa Padrão M"
     else:
-        # Média da pontuação dos testes (Máximo 100 Pts)
-        pontuacao_geral_final = pontuacao_total / len(resultados_avaliacao) if len(resultados_avaliacao) > 0 else 0.0
+        if idade <= 29: return "≤ 29"
+        if idade >= 45: return "≥ 45"
+        return "Faixa Padrão F"
+
+def get_faixa_estatura(estatura):
+    """Função de exemplo para obter a faixa de estatura para C. Cintura."""
+    if estatura <= 166: return "≤ 166"
+    if estatura <= 175: return "172-175"
+    return "176-180" # Exemplo simplificado
+
+def buscar_pontos_oic(oic_nome, sexo, valor_candidato, faixa_idade=None, faixa_estatura=None):
+    """
+    Função (simplificada) para buscar a pontuação oficial do candidato.
+    Em um sistema real, esta função faria interpolação linear ou busca precisa.
+    """
+    if oic_nome == "C. Cintura":
+        tabela = OIC_01_MASCULINO_PONTOS if sexo == "Masculino" else {}
+        faixa = faixa_estatura
+        # Para C. Cintura, procuramos o valor mais próximo igual ou INFERIOR ao do candidato
+        if faixa in tabela:
+            for circ, pontos in sorted(tabela[faixa].items()):
+                if valor_candidato <= circ:
+                    return pontos, max(tabela[faixa].keys()) # Retorna Pontos e o limite MÁXIMO de aprovação
+            return 0.0, max(tabela[faixa].keys())
+        return 0.0, 999.0 
         
-        if pontuacao_geral_final >= 90:
-            nota_geral = "EXCELENTE (Nota Máxima Simulada)"
-        elif pontuacao_geral_final >= 70:
-            nota_geral = "BOM"
-        else:
-            nota_geral = "REGULAR (Mínimo Atingido)"
+    else: # FEMS, FTSC, Corrida 12 min
+        tabela = OIC_02_MASCULINO_PONTOS if sexo == "Masculino" and oic_nome == "FEMS" else {}
+        faixa = faixa_idade
+        # Para Exercícios, procuramos o valor mais próximo igual ou INFERIOR ao do candidato
+        if faixa in tabela:
+            # Converte a lista de pontos para ser fácil de buscar
+            pontos_possiveis = sorted(tabela[faixa].keys(), reverse=True)
+            
+            # 1. Tenta achar o ponto exato ou o ponto mais alto não ultrapassado
+            for ponto, min_rep in tabela[faixa].items():
+                if valor_candidato >= min_rep:
+                    # Em um sistema real, faria interpolação aqui. Para o exemplo, pegamos o ponto mais alto.
+                    return 10.0, 10.0 # Simplifica: se atingiu o mínimo de 10.0, retorna 10.0.
+            
+            # Se não atingiu o mínimo para 2.0 pontos (I), retorna 0.0
+            return 0.0, 10.0 
+        return 0.0, 10.0 # Ponto máximo 10.0
+
+def calcular_resultado(sexo, idade, estatura, resultados_candidato):
+    """
+    Calcula o Grau Final e a Conceituação Global usando os critérios oficiais da NSCA 54-3.
+    """
     
-    return resultado_final, nota_geral, pontuacao_geral_final, resultados_avaliacao, indices_referencia, resultados_candidato
+    faixa_idade = get_faixa_etaria(idade, sexo)
+    faixa_estatura = get_faixa_estatura(estatura)
+    
+    # 1. Coleta de Dados e Cálculo de Pontuação
+    dados_detalhados = []
+    aprovado_em_todos_oic = True
+    pontuacao_total = 0.0
+    
+    # Simula quais testes são aplicáveis para o nosso exemplo simplificado
+    testes_aplicaveis = [k for k in TRADUCAO_CAMPOS.keys()]
+    
+    for oic_nome in testes_aplicaveis:
+        
+        valor_candidato = resultados_candidato.get(oic_nome)
+        
+        # Busca a Pontuação e o limite MÁXIMO de aprovação (I -> S)
+        if oic_nome in ["FEMS", "FTSC", "Corrida 12 min"]:
+            pontuacao_candidato, pontuacao_maxima_oic = buscar_pontos_oic(oic_nome, sexo, valor_candidato, faixa_idade=faixa_idade)
+        elif oic_nome == "C. Cintura":
+             pontuacao_candidato, limite_max_aprovacao = buscar_pontos_oic(oic_nome, sexo, valor_candidato, faixa_estatura=faixa_estatura)
+             pontuacao_maxima_oic = 10.0 # O máximo possível para este OIC é 30.0 no Anexo VI, mas usaremos 10.0 para simplificar a média
+        else:
+            continue
+
+        # Verifica se atingiu o mínimo para o conceito "Satisfatório" (que é o limite de 0.0 pts)
+        status_aprovacao = "APTO" if pontuacao_candidato > 0.0 else "NÃO APTO"
+        if status_aprovacao == "NÃO APTO":
+            aprovado_em_todos_oic = False
+        
+        pontuacao_total += pontuacao_candidato
+
+        dados_detalhados.append({
+            "Teste": TRADUCAO_CAMPOS[oic_nome],
+            "Pontuação Mínima (S)": 0.0, # Em um sistema real, seria o valor do limite 'S' da tabela
+            "Pontuação Máxima (E)": 10.0, # Simplificado para 10.0
+            "Resultado Candidato": valor_candidato,
+            "Pontuação Candidato": pontuacao_candidato,
+            "Situação": status_aprovacao
+        })
+
+    # 2. Cálculo do Grau Final e Conceituação Global
+    num_oic = len(testes_aplicaveis)
+    grau_final = pontuacao_total
+    
+    # 3. Definição da Conceituação Global e Status Final
+    conceituacao_global = "I (Insatisfatório)"
+    for conceito, (min_grau, max_grau) in CONCEITUACAO_GLOBAL.items():
+        if min_grau <= grau_final <= max_grau:
+            conceituacao_global = f"{conceito} ({min_grau:.1f} - {max_grau:.1f})"
+            break
+
+    # 4. Situação Final
+    # Serão considerados APTOS (A) os militares que obtiverem Grau Final >= 20 E Satisfatório (S) em todos os OIC.
+    if aprovado_em_todos_oic and grau_final >= PONTUACAO_MINIMA_APROVACAO:
+        status_geral = "APTO"
+        situacao_final = f"APROVADO: {conceituacao_global}"
+    else:
+        status_geral = "NÃO APTO"
+        situacao_final = f"REPROVADO: {conceituacao_global}"
+        
+    return status_geral, situacao_final, grau_final, dados_detalhados, faixa_idade, faixa_estatura
