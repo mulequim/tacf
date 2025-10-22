@@ -1,168 +1,39 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
-import numpy as np
-
-# Dados dos índices mínimos de aprovação (Simplificados para "TACF Anual" - Baseado nos menores índices do EAOS/EIOS da NSCA 54-4 e incluindo a Circunferência da Cintura do EAT/EIT)
-# NOTA: Estes índices são de APTO MÍNIMO e NÃO variam por IDADE na NSCA 54-4.
-DADOS_INDICES = {
-    # Usando índices do EAOS/EIOS + C. Cintura do EAT/EIT (Grad. Ed. Física)
-    "TACF ANUAL MASCULINO (Base EAOS/EIOS)": {
-        "FEMS": 11, "FTSC": 20, "SH": None, "Corrida 12 min": 1890, "C. Cintura": 98.0 
-    },
-    "TACF ANUAL FEMININO (Base EAOS/EIOS)": {
-        "FEMS": 9, "FTSC": 11, "SH": None, "Corrida 12 min": 1540, "C. Cintura": 89.0
-    },
-}
-
-# Tradução dos campos para exibição
-TRADUCAO_CAMPOS = {
-    "FEMS": "Flexão e Extensão dos M. Superiores (Repetições)",
-    "FTSC": "Flexão do Tronco Sobre as Coxas (Repetições)",
-    "SH": "Salto Horizontal (Metros)",
-    "Corrida 12 min": "Corrida 12 Minutos (Metros)",
-    "C. Cintura": "Circunferência da Cintura (cm)",
-}
-
-def calcular_resultado(tipo_exame, resultados_candidato):
-    """
-    Calcula se o candidato está APTO ou NÃO APTO com base nos índices mínimos.
-    Também calcula a Nota Máxima Simulada e a Pontuação Geral.
-    """
-    indices_minimos = DADOS_INDICES.get(tipo_exame, {})
-    resultados_avaliacao = {}
-    aprovado_geral = True
-    
-    # Dicionários para armazenar os índices de Referência (Mínimo e Máximo Simulado)
-    indices_referencia = {}
-    
-    # Fator de Simulação para "Nota Máxima" (30% acima do mínimo para exercícios)
-    FATOR_MAXIMO_SIMULADO = 1.3
-    
-    # Pontuação Total
-    pontuacao_total = 0.0
-    pontuacao_maxima_possivel = 0.0
-    
-    # Processamento dos testes
-    
-    for teste_curto, min_valor in indices_minimos.items():
-        if min_valor is None:
-            continue
-            
-        pontuacao_maxima_possivel += 100.0
-        valor_candidato = resultados_candidato.get(teste_curto, 0.0 if teste_curto == "C. Cintura" else 0)
-        
-        # Define Mínimo e Máximo Simulado
-        if teste_curto == "C. Cintura":
-            min_aprovacao = min_valor # Mínimo para APTO é o Máximo aceitável
-            max_simulado = round(min_aprovacao * 0.95, 1) # Mínimo para Nota Máxima (5% abaixo)
-        else:
-            min_aprovacao = min_valor
-            max_simulado = int(min_aprovacao * FATOR_MAXIMO_SIMULADO)
-            
-        indices_referencia[teste_curto] = {"Mínimo": min_aprovacao, "Máximo": max_simulado, "Pontuação Candidato": 0.0}
-        
-        # 1. Avaliação APTO/NÃO APTO (Critério Eliminatório)
-        if teste_curto == "C. Cintura":
-            if valor_candidato <= min_aprovacao:
-                resultados_avaliacao[teste_curto] = "APTO"
-            else:
-                resultados_avaliacao[teste_curto] = "NÃO APTO"
-                aprovado_geral = False
-        else:
-            if valor_candidato >= min_aprovacao:
-                resultados_avaliacao[teste_curto] = "APTO"
-            else:
-                resultados_avaliacao[teste_curto] = "NÃO APTO"
-                aprovado_geral = False
-        
-        # 2. Cálculo da Pontuação Individual (Se for APTO)
-        if resultados_avaliacao[teste_curto] == "APTO":
-            ponto_min = min_aprovacao
-            ponto_max = max_simulado
-            
-            if teste_curto == "C. Cintura":
-                # C. Cintura: Menor valor é melhor. Pontuação de 50 (Mínimo) a 100 (Máximo Simulado)
-                if valor_candidato <= ponto_max:
-                    pontuacao_teste = 100.0
-                else:
-                    # Calcula a progressão linear de 50 a 100
-                    pontuacao_teste = 50.0 + (50.0 * (ponto_min - valor_candidato) / (ponto_min - ponto_max))
-                    pontuacao_teste = max(50.0, min(100.0, pontuacao_teste))
-            else:
-                # Exercícios: Maior valor é melhor. Pontuação de 50 (Mínimo) a 100 (Máximo Simulado)
-                if valor_candidato >= ponto_max:
-                    pontuacao_teste = 100.0
-                else:
-                    # Calcula a progressão linear de 50 a 100
-                    pontuacao_teste = 50.0 + (50.0 * (valor_candidato - ponto_min) / (ponto_max - ponto_min))
-                    pontuacao_teste = max(50.0, min(100.0, pontuacao_teste))
-
-            indices_referencia[teste_curto]["Pontuação Candidato"] = pontuacao_teste
-            pontuacao_total += pontuacao_teste
-
-    # 3. Resultado Final e Nota Geral
-    resultado_final = "APTO GERAL" if aprovado_geral else "NÃO APTO GERAL"
-    
-    if resultado_final == "NÃO APTO GERAL":
-        pontuacao_geral_final = 0.0
-        nota_geral = "REPROVADO"
-    else:
-        # Média da pontuação dos testes (Máximo 100 Pts)
-        pontuacao_geral_final = pontuacao_total / len(resultados_avaliacao) if len(resultados_avaliacao) > 0 else 0.0
-        
-        if pontuacao_geral_final >= 90:
-            nota_geral = "EXCELENTE (Nota Máxima Simulada)"
-        elif pontuacao_geral_final >= 70:
-            nota_geral = "BOM"
-        else:
-            nota_geral = "REGULAR (Mínimo Atingido)"
-    
-    return resultado_final, nota_geral, pontuacao_geral_final, resultados_avaliacao, indices_referencia, resultados_candidato
+from tacf_functions import (
+    TRADUCAO_CAMPOS, 
+    DADOS_COMPLETOS_ANEXO_VII, # Apenas para o TACF GERAL, que se mantém
+    calcular_resultado,
+    DADOS_INDICES, # Usado para os campos de entrada
+    CONCEITUACAO_GLOBAL
+)
 
 # --- Interface Streamlit ---
 
 st.set_page_config(
-    page_title="Calculadora TACF COMAER (NSCA 54-4)",
+    page_title="Calculadora TACF COMAER (NSCA 54-3)",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 st.title("Avaliação do Teste de Condicionamento Físico (TACF) COMAER")
-st.subheader("Baseado nos Índices Mínimos da NSCA 54-4/2024 (Exames de Admissão)")
+st.subheader("Baseado na NSCA 54-3/2024 (TACF Anual - Oficiais e Praças)")
 st.markdown("---")
 
 # --- Lógica do Menu ---
 
 st.sidebar.header("1. Seleção da Opção")
-opcoes_base = ["TACF GERAL (Tabelas de Índices)", "Calcular TACF Anual (Simplificado)"]
+opcoes_base = ["TACF GERAL (Tabelas de Índices - NSCA 54-4)", "Calcular TACF ANUAL (NSCA 54-3 - Pontuação Oficial)"]
 opcao_selecionada = st.sidebar.radio("Escolha a funcionalidade:", opcoes_base)
 
 st.sidebar.markdown("---")
 
-if opcao_selecionada == "TACF GERAL (Tabelas de Índices)":
+if opcao_selecionada == "TACF GERAL (Tabelas de Índices - NSCA 54-4)":
     
-    st.header("TACF GERAL: Tabela de Índices Mínimos por Exame")
-    st.markdown("Abaixo estão todos os índices mínimos de aprovação exigidos para os diferentes exames, cursos e estágios, conforme o Anexo VII da NSCA 54-4/2024.")
-
-    # Reconstroi o DataFrame completo para a exibição (usando dados do Anexo VII original)
-    DADOS_COMPLETOS_ANEXO_VII = {
-        # --- MASCULINO ---
-        "CFOAV, CFOINT, CFOINF, CFS, CFT e EAGS (M)": {"FEMS": 26, "FTSC": 42, "SH": 1.8, "Corrida 12 min": 2250, "C. Cintura": None},
-        "CAMAR, CADAR, CAFAR, EAOEAR, EAOT, CFOE, EIAC e EAOAP (M)": {"FEMS": 21, "FTSC": 34, "SH": None, "Corrida 12 min": 2200, "C. Cintura": None},
-        "CPCAR (M)": {"FEMS": 21, "FTSC": 38, "SH": None, "Corrida 12 min": 2050, "C. Cintura": None},
-        "EAOF (M)": {"FEMS": 17, "FTSC": 27, "SH": None, "Corrida 12 min": 2050, "C. Cintura": None},
-        "EAT e EIT (Grad. Ed. Física) e EIT (Seg. e Defesa) (M)": {"FEMS": 19, "FTSC": 35, "SH": None, "Corrida 12 min": 2100, "C. Cintura": 98.0},
-        "EAT, EIT, EAS, EIS, EAP, EIP e EAP CB (M)": {"FEMS": 13, "FTSC": 25, "SH": None, "Corrida 12 min": 1900, "C. Cintura": None},
-        "EAOS e EIOS (M)": {"FEMS": 11, "FTSC": 20, "SH": None, "Corrida 12 min": 1890, "C. Cintura": None},
-        # --- FEMININO ---
-        "CFOAV, CFOINT, CFOINF, CFS, CFT e EAGS (F)": {"FEMS": 16, "FTSC": 34, "SH": 1.4, "Corrida 12 min": 1850, "C. Cintura": None},
-        "CAMAR, CADAR, CAFAR, EAOEAR, EAOT, CFOE, EIAC e EAOAP (F)": {"FEMS": 12, "FTSC": 29, "SH": None, "Corrida 12 min": 1650, "C. Cintura": None},
-        "CPCAR (F)": {"FEMS": 13, "FTSC": 30, "SH": None, "Corrida 12 min": 1650, "C. Cintura": None},
-        "EAOF (F)": {"FEMS": 17, "FTSC": 18, "SH": None, "Corrida 12 min": 1650, "C. Cintura": None},
-        "EAT e EIT (Grad. Ed. Física) (F)": {"FEMS": 17, "FTSC": 31, "SH": None, "Corrida 12 min": 1710, "C. Cintura": 89.0},
-        "EAT, EIT, EAS, EIS, EAP, EIP e EAP CB (F)": {"FEMS": 9, "FTSC": 15, "SH": None, "Corrida 12 min": 1600, "C. Cintura": None},
-        "EAOS e EIOS (F)": {"FEMS": 9, "FTSC": 11, "SH": None, "Corrida 12 min": 1540, "C. Cintura": None},
-    }
+    st.header("TACF GERAL: Tabela de Índices Mínimos por Exame (Base NSCA 54-4)")
+    st.markdown("Esta tabela é baseada na **NSCA 54-4 (Exames de Admissão)** e mostra apenas o mínimo de aprovação por curso/estágio, **sem variação de idade ou pontuação**.")
 
     df_geral_m = []
     df_geral_f = []
@@ -173,7 +44,7 @@ if opcao_selecionada == "TACF GERAL (Tabelas de Índices)":
                 "Exame/Estágio": nome_exame.replace(" (M)", ""),
                 TRADUCAO_CAMPOS["FEMS"]: indices["FEMS"] if indices["FEMS"] is not None else "-",
                 TRADUCAO_CAMPOS["FTSC"]: indices["FTSC"] if indices["FTSC"] is not None else "-",
-                TRADUCAO_CAMPOS["SH"]: indices["SH"] if indices["SH"] is not None else "-",
+                "SH (Salto Horizontal)": indices["SH"] if indices["SH"] is not None else "-",
                 TRADUCAO_CAMPOS["Corrida 12 min"]: indices["Corrida 12 min"] if indices["Corrida 12 min"] is not None else "-",
                 TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']} cm" if indices["C. Cintura"] is not None else "-",
             })
@@ -182,52 +53,68 @@ if opcao_selecionada == "TACF GERAL (Tabelas de Índices)":
                 "Exame/Estágio": nome_exame.replace(" (F)", ""),
                 TRADUCAO_CAMPOS["FEMS"]: indices["FEMS"] if indices["FEMS"] is not None else "-",
                 TRADUCAO_CAMPOS["FTSC"]: indices["FTSC"] if indices["FTSC"] is not None else "-",
-                TRADUCAO_CAMPOS["SH"]: indices["SH"] if indices["SH"] is not None else "-",
+                "SH (Salto Horizontal)": indices["SH"] if indices["SH"] is not None else "-",
                 TRADUCAO_CAMPOS["Corrida 12 min"]: indices["Corrida 12 min"] if indices["Corrida 12 min"] is not None else "-",
-                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']} cm" if indices["C. Cintura"] is not None else "-",
+                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']} cm" if indices["Cintura"] is not None else "-",
             })
 
-    st.subheader("Índices Mínimos - Sexo MASCULINO")
+    st.subheader("Índices Mínimos - Sexo MASCULINO (NSCA 54-4)")
     st.dataframe(pd.DataFrame(df_geral_m), hide_index=True, use_container_width=True)
 
-    st.subheader("Índices Mínimos - Sexo FEMININO")
+    st.subheader("Índices Mínimos - Sexo FEMININO (NSCA 54-4)")
     st.dataframe(pd.DataFrame(df_geral_f), hide_index=True, use_container_width=True)
 
-    st.caption("FEMS (Flexão e Extensão de Membros Superiores), FTSC (Flexão do Tronco Sobre as Coxas), SH (Salto Horizontal), C. Cintura (Circunferência da Cintura).")
+    st.caption("A NSCA 54-4 trata apenas da aprovação mínima (APTO/NÃO APTO) para Exames de Admissão.")
     
 else:
-    # --- CALCULAR DESEMPENHO TACF ANUAL SIMPLIFICADO ---
+    # --- CALCULAR DESEMPENHO TACF ANUAL (NSCA 54-3) ---
     
-    st.header("Calcular Desempenho no TACF Anual (Simplificado)")
-    st.warning("⚠️ **AVISO: Base Normativa e Idade:** Esta ferramenta utiliza a **NSCA 54-4 (Exames de Admissão)**. Os índices mínimos **NÃO variam por Idade**. A Pontuação Máxima/Geral e a Nota Final são **Simulações** para fins didáticos.")
+    st.header("Calcular TACF ANUAL (NSCA 54-3)")
+    st.warning("A avaliação abaixo utiliza a lógica da **NSCA 54-3** (Grau Final por somatório de pontos) e **CONSIDERA A IDADE** e **ESTATURA** para buscar as pontuações. Os dados de pontuação na demonstração são SIMPLIFICADOS para fins de prova de conceito.")
     
-    st.sidebar.header("2. Padrão e Idade")
-    opcoes_exame = sorted(list(DADOS_INDICES.keys()))
-    tipo_exame = st.sidebar.selectbox(
-        "Selecione o Sexo/Padrão de Cálculo:",
-        opcoes_exame,
-        index=0 # Default para Masculino
+    st.sidebar.header("2. Dados Pessoais para Pontuação")
+    
+    col_s, col_i, col_e = st.sidebar.columns(3)
+    
+    tipo_exame = col_s.selectbox(
+        "Sexo/Padrão:",
+        sorted(list(DADOS_INDICES.keys())),
+        index=0
+    )
+    sexo = "Masculino" if "MASCULINO" in tipo_exame else "Feminino"
+
+    idade_candidato = col_i.number_input(
+        "Idade:",
+        min_value=18,
+        max_value=60,
+        value=30,
+        step=1,
+        help="Critério fundamental para as tabelas de pontuação da NSCA 54-3."
     )
     
-    # Campo Idade (apenas para referência, não afeta o cálculo APTO/NÃO APTO)
-    idade_candidato = st.sidebar.number_input(
-        "Idade do Candidato (Apenas para Referência)",
-        min_value=16,
-        value=25,
+    estatura_candidato = col_e.number_input(
+        "Estatura (cm):",
+        min_value=150,
+        max_value=200,
+        value=175,
         step=1,
-        help="A idade não altera os índices desta avaliação (NSCA 54-4)."
+        help="Necessário para a pontuação da Circunferência da Cintura (OIC 01/05)."
     )
     
     st.sidebar.markdown("---")
-    st.sidebar.header("3. Insira os Resultados")
+    st.sidebar.header("3. Resultados dos Testes")
 
     indices_necessarios = DADOS_INDICES[tipo_exame]
 
-    resultados = {"Idade": idade_candidato}
+    resultados = {
+        "Idade": idade_candidato, 
+        "Estatura": estatura_candidato
+    }
 
     # Campos de entrada de dados
-    for teste_curto, min_valor in indices_necessarios.items():
-        if min_valor is not None:
+    for teste_curto in ["FEMS", "FTSC", "Corrida 12 min", "C. Cintura"]:
+        if teste_curto in indices_necessarios:
+            min_valor = indices_necessarios[teste_curto]
             label = TRADUCAO_CAMPOS[teste_curto]
             
             # Define o valor inicial para o input
@@ -235,17 +122,14 @@ else:
                 initial_value = min_valor - 1.0 
                 step_val = 0.1
                 input_format = "%.1f"
-                help_text = f"Máximo permitido: {min_valor} cm."
             elif teste_curto == "Corrida 12 min":
                 initial_value = int(min_valor)
                 step_val = 10
                 input_format = "%d"
-                help_text = f"Mínimo exigido: {min_valor} m."
             else:
                 initial_value = int(min_valor)
                 step_val = 1
                 input_format = "%d"
-                help_text = f"Mínimo exigido: {min_valor} repetições."
 
             # Repetições, Distância ou Circunferência
             if teste_curto == "C. Cintura":
@@ -255,7 +139,7 @@ else:
                     value=initial_value,
                     step=step_val,
                     format=input_format,
-                    help=help_text
+                    help=f"Medição da cintura (cm)."
                 )
             else:
                 resultados[teste_curto] = st.sidebar.number_input(
@@ -264,85 +148,59 @@ else:
                     value=initial_value,
                     step=step_val,
                     format=input_format,
-                    help=help_text
+                    help=f"Número de repetições/metros."
                 )
         
     st.sidebar.markdown("---")
     
-    if st.sidebar.button("Calcular Resultado do TACF"):
+    if st.sidebar.button("Calcular Resultado Oficial NSCA 54-3"):
         # Execução do cálculo
-        resultado_final, nota_geral, pontuacao_geral_final, resultados_avaliacao, indices_referencia, resultados_candidato = calcular_resultado(tipo_exame, resultados)
+        status_geral, situacao_final, grau_final, dados_detalhados, faixa_idade, faixa_estatura = calcular_resultado(
+            sexo, idade_candidato, estatura_candidato, resultados
+        )
         
-        st.header("Resultado da Avaliação")
+        st.header("Resultado da Avaliação Oficial (NSCA 54-3)")
         
         # --- TABELA RESUMO GERAL ---
-        st.subheader("Resumo da Situação Geral")
+        st.subheader("Resumo da Situação e Grau Final")
         
         # Cria a tabela de resumo
         df_resumo = pd.DataFrame({
-            "Critério": ["STATUS GERAL (Eliminatório)", "NOTA GERAL (Simulada)"],
-            "Resultado": [resultado_final, nota_geral],
-            "Valor": ["-", f"{pontuacao_geral_final:.1f} Pts / 100 Pts"]
+            "Critério": ["Grau Final (Soma dos Pontos)", "STATUS GERAL (Eliminatório)", "Conceituação Global"],
+            "Resultado": [f"{grau_final:.1f} Pts", status_geral, situacao_final.split(": ")[1] if ":" in situacao_final else situacao_final],
+            "Referência": ["Grau Mínimo p/ Aprovação: 20 Pts", "Aprovação Requer Grau Final ≥ 20 E APTO em todos os OIC", "I (0-19.9) | S (20-39.9) | B (40-69.9) | MB (70-89.9) | E (90-100)"]
         })
         
         # Define a cor para a Situação Final
         def color_situacao(val):
-            # Val é o texto da célula (Resultado: APTO GERAL ou NÃO APTO GERAL)
-            if "APTO GERAL" in val:
+            if "APTO" in val:
                 return 'background-color: #d4edda; color: black'
-            elif "NÃO APTO GERAL" in val:
+            elif "NÃO APTO" in val:
                 return 'background-color: #f8d7da; color: black'
             return ''
         
-        # Aplicar o estilo SOMENTE à célula na linha de índice 0 (STATUS GERAL) e coluna 'Resultado'
+        # Aplicar o estilo SOMENTE à célula STATUS GERAL (índice 1) na coluna 'Resultado'
         st.dataframe(
             df_resumo.style.applymap(
                 color_situacao,
-                # CORREÇÃO: Usa uma tupla (linhas, colunas) para o subset
-                subset=([0], ['Resultado'])
+                subset=([1], ['Resultado']) 
             ),
             hide_index=True,
             use_container_width=True
         )
+        
+        # Exibe as faixas de referência (para fins de debug e clareza)
+        st.caption(f"Faixa Etária de Pontuação (simulada): **{faixa_idade}**")
+        st.caption(f"Faixa de Estatura de Pontuação (simulada): **{faixa_estatura}**")
+        if status_geral == "APTO":
+            st.balloons()
 
         st.markdown("---")
         
         # --- TABELA DE DESEMPENHO DETALHADO ---
-        st.subheader("Desempenho Detalhado por Teste")
+        st.subheader("Pontuação Detalhada por OIC")
         
-        # Prepara a lista de resultados e índices para exibição
-        display_data = []
-        for k in ["FEMS", "FTSC", "Corrida 12 min", "C. Cintura"]:
-            if k in resultados_avaliacao:
-                
-                # Valores de Referência
-                min_aprovacao = indices_referencia[k]["Mínimo"]
-                max_simulado = indices_referencia[k]["Máximo"]
-                pontuacao_cand = indices_referencia[k]["Pontuação Candidato"]
-                valor_candidato = resultados_candidato.get(k)
-                avaliacao = resultados_avaliacao[k]
-                
-                # Unidade
-                if k == "C. Cintura":
-                    unidade = "cm"
-                    min_texto = f"Máx: {min_aprovacao} {unidade}" # C. Cintura: Mínimo para ser APTO é o Máximo aceitável
-                    max_texto = f"Mín: {max_simulado} {unidade}" # C. Cintura: Mínimo para Nota Máxima é um valor menor
-                else:
-                    unidade = "repetições" if k in ["FEMS", "FTSC"] else "m"
-                    min_texto = f"Mín: {min_aprovacao} {unidade}"
-                    max_texto = f"Máx: {max_simulado} {unidade}"
-                
-                
-                display_data.append({
-                    "Teste": TRADUCAO_CAMPOS[k],
-                    "Pontuação do Candidato (Pts)": f"{pontuacao_cand:.1f}",
-                    "Pontuação Mínima (Aprovação)": min_texto,
-                    "Pontuação Máxima (Simulada)": max_texto,
-                    "Resultado do Candidato": f"{valor_candidato} {unidade}",
-                    "Situação": avaliacao
-                })
-
-        df_resultados = pd.DataFrame(display_data)
+        df_resultados = pd.DataFrame(dados_detalhados)
         
         # Cor da célula na tabela
         def color_status_detalhe(val):
@@ -353,13 +211,18 @@ else:
             df_resultados.style.applymap(
                 color_status_detalhe, 
                 subset=['Situação']
-            ),
+            ).format({
+                'Pontuação Candidato': "{:.1f}",
+                'Pontuação Mínima (S)': "{:.1f}",
+                'Pontuação Máxima (E)': "{:.1f}",
+            }),
             hide_index=True,
             use_container_width=True
         )
 
 st.markdown("---")
 st.caption("""
-    **NOTA SOBRE PONTUAÇÃO E IDADE:** A **NSCA 54-4** (base desta calculadora) apenas define o índice mínimo ("APTO"). 
-    A **Pontuação GERAL, Pontuação Máxima e os conceitos de nota (REGULAR, BOM, EXCELENTE)** são **SIMULAÇÕES DIDÁTICAS** implementadas para atender sua necessidade de um sistema de notas, **NÃO sendo valores ou critérios oficiais do COMAER** (que utiliza a **NSCA 54-3** e considera a idade para pontuação).
+    **NOTA IMPORTANTE SOBRE A PONTUAÇÃO (NSCA 54-3):** As tabelas de pontuação (Anexo VI) são complexas, com variações por idade e altura.
+    Nesta demonstração, as funções de busca (`buscar_pontos_oic`) utilizam **apenas um subconjunto de dados** das tabelas oficiais para provar a lógica de cálculo (Soma dos Pontos e Grau Final).
+    Para uma calculadora oficial, seria necessária a transcrição completa de **todas** as tabelas do Anexo VI.
 """)
