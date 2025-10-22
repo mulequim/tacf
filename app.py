@@ -24,17 +24,26 @@ TRADUCAO_CAMPOS = {
 def calcular_resultado(tipo_exame, resultados_candidato):
     """
     Calcula se o candidato está APTO ou NÃO APTO com base nos índices mínimos.
-    
-    A avaliação segue o critério da NSCA 54-4: a reprovação em um teste reprova no exame inteiro.
+    Também calcula a Nota Máxima Simulada.
     """
     indices_minimos = DADOS_INDICES.get(tipo_exame, {})
     resultados_avaliacao = {}
     aprovado_geral = True
     
+    # Dicionários para armazenar os índices de Referência (Mínimo e Máximo Simulado)
+    indices_referencia = {}
+    
+    # Fator de Simulação para "Nota Máxima" (30% acima do mínimo para exercícios)
+    FATOR_MAXIMO_SIMULADO = 1.3
+    
+    # Processamento dos testes
+    
     # 1. FEMS (Flexão e Extensão dos Membros Superiores)
     min_fems = indices_minimos.get("FEMS")
     res_fems = resultados_candidato.get("FEMS", 0)
     if min_fems is not None:
+        max_fems = int(min_fems * FATOR_MAXIMO_SIMULADO)
+        indices_referencia["FEMS"] = {"Mínimo": min_fems, "Máximo": max_fems}
         if res_fems >= min_fems:
             resultados_avaliacao["FEMS"] = "APTO" 
         else:
@@ -45,6 +54,8 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     min_ftsc = indices_minimos.get("FTSC")
     res_ftsc = resultados_candidato.get("FTSC", 0)
     if min_ftsc is not None:
+        max_ftsc = int(min_ftsc * FATOR_MAXIMO_SIMULADO)
+        indices_referencia["FTSC"] = {"Mínimo": min_ftsc, "Máximo": max_ftsc}
         if res_ftsc >= min_ftsc:
             resultados_avaliacao["FTSC"] = "APTO"
         else:
@@ -55,6 +66,8 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     min_corrida = indices_minimos.get("Corrida 12 min")
     res_corrida = resultados_candidato.get("Corrida 12 min", 0)
     if min_corrida is not None:
+        max_corrida = int(min_corrida * FATOR_MAXIMO_SIMULADO)
+        indices_referencia["Corrida 12 min"] = {"Mínimo": min_corrida, "Máximo": max_corrida}
         if res_corrida >= min_corrida:
             resultados_avaliacao["Corrida 12 min"] = "APTO"
         else:
@@ -62,20 +75,51 @@ def calcular_resultado(tipo_exame, resultados_candidato):
             aprovado_geral = False
             
     # 4. Circunferência da Cintura (C. Cintura)
-    max_cintura = indices_minimos.get("C. Cintura")
+    max_cintura_minimo = indices_minimos.get("C. Cintura") # Este é o valor MÁXIMO aceitável para aprovação
     res_cintura = resultados_candidato.get("C. Cintura", 999.0)
-    if max_cintura is not None:
-        if res_cintura <= max_cintura:
+    if max_cintura_minimo is not None:
+        # Para C. Cintura, o "máximo" para aprovação é o valor mínimo da NSCA 54-4 (ex: 98.0 cm)
+        # E a nota máxima simulada deve ser um valor ainda menor (idealmente, um valor de referência de "excelente")
+        # Usaremos 5% abaixo do limite como "Nota Máxima" (o menor valor é o melhor)
+        max_cintura_simulado = round(max_cintura_minimo * 0.95, 1) # Ex: 98.0 * 0.95 = 93.1 cm
+        indices_referencia["C. Cintura"] = {"Mínimo": max_cintura_minimo, "Máximo": max_cintura_simulado} # Onde "Máximo" é o melhor resultado para C.Cintura
+        
+        if res_cintura <= max_cintura_minimo:
             resultados_avaliacao["C. Cintura"] = "APTO"
         else:
             resultados_avaliacao["C. Cintura"] = "NÃO APTO"
             aprovado_geral = False
             
-    # Resultado final e Nota Geral (customizada para a NSCA 54-4)
+    # Resultado final e Nota Geral
     resultado_final = "APTO GERAL" if aprovado_geral else "NÃO APTO GERAL"
-    nota_geral = "APROVADO (Mínimo)" if aprovado_geral else "REPROVADO"
     
-    return resultado_final, nota_geral, resultados_avaliacao, indices_minimos, resultados_candidato
+    # Lógica da Nota Geral Simulada (10)
+    atingiu_nota_maxima_simulada = True
+    
+    for k, v in resultados_avaliacao.items():
+        if v == "NÃO APTO":
+            atingiu_nota_maxima_simulada = False
+            break # Não precisa verificar mais
+            
+        referencias = indices_referencia.get(k)
+        if referencias:
+            if k == "C. Cintura":
+                # Para C. Cintura, o resultado deve ser MENOR ou IGUAL ao Máximo Simulado
+                if resultados_candidato[k] > referencias["Máximo"]:
+                    atingiu_nota_maxima_simulada = False
+            else:
+                # Para exercícios (FEMS, FTSC, Corrida), o resultado deve ser MAIOR ou IGUAL ao Máximo Simulado
+                if resultados_candidato[k] < referencias["Máximo"]:
+                    atingiu_nota_maxima_simulada = False
+    
+    if atingiu_nota_maxima_simulada and aprovado_geral:
+        nota_geral = "APROVADO (Nota Máxima Simulada)"
+    elif aprovado_geral:
+        nota_geral = "APROVADO (Mínimo Atingido)"
+    else:
+        nota_geral = "REPROVADO"
+    
+    return resultado_final, nota_geral, resultados_avaliacao, indices_referencia, resultados_candidato
 
 # --- Interface Streamlit ---
 
@@ -157,9 +201,9 @@ else:
     # --- CALCULAR DESEMPENHO TACF ANUAL SIMPLIFICADO ---
     
     st.header("Calcular Desempenho no TACF Anual (Simplificado)")
-    st.warning("**Atenção:** Esta calculadora é baseada na **NSCA 54-4/2024 (Exames de Admissão)**. Os índices **NÃO consideram a idade** do candidato. O TACF Anual (Efetivo) é regido por outra norma (NSCA 54-3) que varia por idade.")
+    st.warning("⚠️ **AVISO: Base Normativa e Idade:** Esta ferramenta utiliza a **NSCA 54-4 (Exames de Admissão)**. Os índices mínimos **NÃO variam por Idade**. O cálculo de pontuação (Nota 10) é uma **Simulação**.")
     
-    st.sidebar.header("2. Selecione o Padrão")
+    st.sidebar.header("2. Padrão e Idade")
     opcoes_exame = sorted(list(DADOS_INDICES.keys()))
     tipo_exame = st.sidebar.selectbox(
         "Selecione o Sexo/Padrão de Cálculo:",
@@ -167,31 +211,43 @@ else:
         index=0 # Default para Masculino
     )
     
+    # Campo Idade (apenas para referência, não afeta o cálculo APTO/NÃO APTO)
+    idade_candidato = st.sidebar.number_input(
+        "Idade do Candidato (Apenas para Referência)",
+        min_value=16,
+        value=25,
+        step=1,
+        help="A idade não altera os índices desta avaliação (NSCA 54-4)."
+    )
+    
     st.sidebar.markdown("---")
     st.sidebar.header("3. Insira os Resultados")
 
     indices_necessarios = DADOS_INDICES[tipo_exame]
 
-    resultados = {}
+    resultados = {"Idade": idade_candidato}
 
     # Campos de entrada de dados
     for teste_curto, min_valor in indices_necessarios.items():
         if min_valor is not None:
             label = TRADUCAO_CAMPOS[teste_curto]
             
-            # Determina o valor inicial para o input
+            # Define o valor inicial para o input
             if teste_curto == "C. Cintura":
                 initial_value = min_valor - 1.0 
                 step_val = 0.1
                 input_format = "%.1f"
+                help_text = f"Máximo permitido: {min_valor} cm."
             elif teste_curto == "Corrida 12 min":
                 initial_value = int(min_valor)
                 step_val = 10
                 input_format = "%d"
+                help_text = f"Mínimo exigido: {min_valor} m."
             else:
                 initial_value = int(min_valor)
                 step_val = 1
                 input_format = "%d"
+                help_text = f"Mínimo exigido: {min_valor} repetições."
 
             # Repetições, Distância ou Circunferência
             if teste_curto == "C. Cintura":
@@ -201,7 +257,7 @@ else:
                     value=initial_value,
                     step=step_val,
                     format=input_format,
-                    help=f"Máximo permitido: {min_valor} cm. (Base EAT/EIT)"
+                    help=help_text
                 )
             else:
                 resultados[teste_curto] = st.sidebar.number_input(
@@ -210,30 +266,37 @@ else:
                     value=initial_value,
                     step=step_val,
                     format=input_format,
-                    help=f"Mínimo exigido: {min_valor} " + ("m." if teste_curto == "Corrida 12 min" else "repetições.")
+                    help=help_text
                 )
         
     st.sidebar.markdown("---")
     
     if st.sidebar.button("Calcular Resultado do TACF"):
         # Execução do cálculo
-        resultado_final, nota_geral, resultados_avaliacao, indices_minimos, resultados_candidato = calcular_resultado(tipo_exame, resultados)
+        resultado_final, nota_geral, resultados_avaliacao, indices_referencia, resultados_candidato = calcular_resultado(tipo_exame, resultados)
         
         st.header("Resultado da Avaliação")
         
         # --- EXIBIÇÃO DA NOTA E STATUS GERAL ---
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
-        # STATUS GERAL
+        col1.metric("Padrão de Cálculo", tipo_exame)
+        col2.metric("Idade (Referência)", f"{idade_candidato} anos")
+        
         if resultado_final == "APTO GERAL":
-            col1.metric("STATUS GERAL", resultado_final)
-            col2.success(f"**NOTA GERAL: {nota_geral}**")
+            col3.success(f"**STATUS GERAL: {resultado_final}**")
             st.balloons()
         else:
-            col1.metric("STATUS GERAL", resultado_final)
-            col2.error(f"**NOTA GERAL: {nota_geral}**")
-            st.warning("A reprovação em qualquer teste implica em 'NÃO APTO GERAL' (REPROVADO) no TACF, conforme Art. [span_0](start_span)18, alínea b) da NSCA 54-4/2024.[span_0](end_span)")
+            col3.error(f"**STATUS GERAL: {resultado_final}**")
 
+        st.markdown("---")
+        
+        st.subheader(f"Nota Final: {nota_geral}")
+        if nota_geral == "REPROVADO":
+            st.error("A reprovação em qualquer teste implica em 'NÃO APTO GERAL' (REPROVADO) no TACF.")
+        elif nota_geral == "APROVADO (Nota Máxima Simulada)":
+            st.success("Parabéns! Você atingiu o critério para a Nota Máxima Simulada.")
+        
         st.markdown("---")
         st.subheader("Desempenho por Teste")
         
@@ -242,29 +305,30 @@ else:
         for k in ["FEMS", "FTSC", "Corrida 12 min", "C. Cintura"]:
             if k in resultados_avaliacao:
                 
-                valor_resultado = resultados_candidato.get(k)
-                valor_limite = indices_minimos[k]
+                valor_limite_min = indices_referencia[k]["Mínimo"]
+                valor_limite_max = indices_referencia[k]["Máximo"]
+                valor_candidato = resultados_candidato.get(k)
+                avaliacao = resultados_avaliacao[k]
                 
+                # Unidade e Texto de Referência
                 if k == "C. Cintura":
                     unidade = "cm"
-                    limite_texto = f"Máx: {valor_limite} {unidade}"
-                    resultado_texto = f"Atual: {valor_resultado} {unidade}"
+                    limite_texto = f"Mín. Aprovação: ≤ {valor_limite_min} {unidade} | Máx. Simulada: ≤ {valor_limite_max} {unidade}"
+                    resultado_texto = f"{valor_candidato} {unidade}"
                 elif k == "Corrida 12 min":
                     unidade = "m"
-                    limite_texto = f"Mín: {valor_limite} {unidade}"
-                    resultado_texto = f"Atual: {valor_resultado} {unidade}"
+                    limite_texto = f"Mín. Aprovação: ≥ {valor_limite_min} {unidade} | Máx. Simulada: ≥ {valor_limite_max} {unidade}"
+                    resultado_texto = f"{valor_candidato} {unidade}"
                 else:
                     unidade = "repetições"
-                    limite_texto = f"Mín: {valor_limite} {unidade}"
-                    resultado_texto = f"Atual: {valor_resultado} {unidade}"
+                    limite_texto = f"Mín. Aprovação: ≥ {valor_limite_min} {unidade} | Máx. Simulada: ≥ {valor_limite_max} {unidade}"
+                    resultado_texto = f"{valor_candidato} {unidade}"
                 
-                avaliacao = resultados_avaliacao[k]
-
                 display_data.append({
                     "Teste": TRADUCAO_CAMPOS[k],
                     "Resultado do Candidato": resultado_texto,
-                    "Índice de Referência": limite_texto,
-                    "Avaliação": avaliacao
+                    "Referência (Simulada)": limite_texto,
+                    "Status": avaliacao
                 })
 
         df_resultados = pd.DataFrame(display_data)
@@ -277,7 +341,7 @@ else:
         st.dataframe(
             df_resultados.style.applymap(
                 color_status, 
-                subset=['Avaliação']
+                subset=['Status']
             ),
             hide_index=True,
             use_container_width=True
@@ -285,8 +349,5 @@ else:
 
 st.markdown("---")
 st.caption("""
-    **Aviso de Limitação:** Esta ferramenta utiliza a **NSCA 54-4/2024**, que trata de **Exames de Admissão/Seleção**.
-    Os critérios de referência para o **TACF Anual Simplificado** são baseados nos índices **menos exigentes** desta norma (EAOS/EIOS para exercícios e EAT/EIT para C. Cintura).
-    O **TACF Anual do Efetivo** (militar de carreira) é regido pela **NSCA 54-3** e considera a **Idade**, o que altera os índices mínimos.
-    **Não há variação de índices por idade nesta ferramenta**, pois ela se baseia na NSCA 54-4.
+    **[span_0](start_span)NOTA SOBRE A SIMULAÇÃO:** A **NSCA 54-4** (base desta calculadora) apenas define o índice mínimo ("APTO")[span_0](end_span). A coluna "Máx. Simulada" foi criada para fins didáticos, representando um desempenho 30% superior ao mínimo (ou 5% inferior ao máximo no caso da C. Cintura), **NÃO sendo um valor oficial do COMAER** para a nota 10.
 """)
