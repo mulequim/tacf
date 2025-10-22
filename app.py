@@ -24,6 +24,8 @@ TRADUCAO_CAMPOS = {
 def calcular_resultado(tipo_exame, resultados_candidato):
     """
     Calcula se o candidato está APTO ou NÃO APTO com base nos índices mínimos.
+    
+    A avaliação segue o critério da NSCA 54-4: a reprovação em um teste reprova no exame inteiro.
     """
     indices_minimos = DADOS_INDICES.get(tipo_exame, {})
     resultados_avaliacao = {}
@@ -34,9 +36,9 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     res_fems = resultados_candidato.get("FEMS", 0)
     if min_fems is not None:
         if res_fems >= min_fems:
-            resultados_avaliacao["FEMS"] = f"APTO ({res_fems} Repetições)"
+            resultados_avaliacao["FEMS"] = "APTO" 
         else:
-            resultados_avaliacao["FEMS"] = f"NÃO APTO ({res_fems} Repetições). Mínimo exigido: {min_fems}."
+            resultados_avaliacao["FEMS"] = "NÃO APTO"
             aprovado_geral = False
 
     # 2. FTSC (Flexão do Tronco Sobre as Coxas)
@@ -44,9 +46,9 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     res_ftsc = resultados_candidato.get("FTSC", 0)
     if min_ftsc is not None:
         if res_ftsc >= min_ftsc:
-            resultados_avaliacao["FTSC"] = f"APTO ({res_ftsc} Repetições)"
+            resultados_avaliacao["FTSC"] = "APTO"
         else:
-            resultados_avaliacao["FTSC"] = f"NÃO APTO ({res_ftsc} Repetições). Mínimo exigido: {min_ftsc}."
+            resultados_avaliacao["FTSC"] = "NÃO APTO"
             aprovado_geral = False
 
     # 3. Corrida 12 min
@@ -54,26 +56,26 @@ def calcular_resultado(tipo_exame, resultados_candidato):
     res_corrida = resultados_candidato.get("Corrida 12 min", 0)
     if min_corrida is not None:
         if res_corrida >= min_corrida:
-            resultados_avaliacao["Corrida 12 min"] = f"APTO ({res_corrida} m)"
+            resultados_avaliacao["Corrida 12 min"] = "APTO"
         else:
-            resultados_avaliacao["Corrida 12 min"] = f"NÃO APTO ({res_corrida} m). Mínimo exigido: {min_corrida} m."
+            resultados_avaliacao["Corrida 12 min"] = "NÃO APTO"
             aprovado_geral = False
             
     # 4. Circunferência da Cintura (C. Cintura)
-    # Importante: O índice é o MÁXIMO (<=).
     max_cintura = indices_minimos.get("C. Cintura")
-    res_cintura = resultados_candidato.get("C. Cintura", 999.0) # Assume um valor alto para caso não seja preenchido
+    res_cintura = resultados_candidato.get("C. Cintura", 999.0)
     if max_cintura is not None:
         if res_cintura <= max_cintura:
-            resultados_avaliacao["C. Cintura"] = f"APTO ({res_cintura} cm)"
+            resultados_avaliacao["C. Cintura"] = "APTO"
         else:
-            resultados_avaliacao["C. Cintura"] = f"NÃO APTO ({res_cintura} cm). Máximo permitido: {max_cintura} cm."
+            resultados_avaliacao["C. Cintura"] = "NÃO APTO"
             aprovado_geral = False
             
-    # Resultado final
-    resultado_final = "APTO" if aprovado_geral else "NÃO APTO"
+    # Resultado final e Nota Geral (customizada para a NSCA 54-4)
+    resultado_final = "APTO GERAL" if aprovado_geral else "NÃO APTO GERAL"
+    nota_geral = "APROVADO (Mínimo)" if aprovado_geral else "REPROVADO"
     
-    return resultado_final, resultados_avaliacao, indices_minimos
+    return resultado_final, nota_geral, resultados_avaliacao, indices_minimos, resultados_candidato
 
 # --- Interface Streamlit ---
 
@@ -100,7 +102,7 @@ if opcao_selecionada == "TACF GERAL (Tabelas de Índices)":
     st.header("TACF GERAL: Tabela de Índices Mínimos por Exame")
     st.markdown("Abaixo estão todos os índices mínimos de aprovação exigidos para os diferentes exames, cursos e estágios, conforme o Anexo VII da NSCA 54-4/2024.")
 
-    # Reconstroi o DataFrame completo (como era na versão anterior para manter a Tabela Geral)
+    # Reconstroi o DataFrame completo para a exibição (usando dados do Anexo VII original)
     DADOS_COMPLETOS_ANEXO_VII = {
         # --- MASCULINO ---
         "CFOAV, CFOINT, CFOINF, CFS, CFT e EAGS (M)": {"FEMS": 26, "FTSC": 42, "SH": 1.8, "Corrida 12 min": 2250, "C. Cintura": None},
@@ -179,7 +181,7 @@ else:
             
             # Determina o valor inicial para o input
             if teste_curto == "C. Cintura":
-                initial_value = min_valor - 1.0 # Valor abaixo do máximo
+                initial_value = min_valor - 1.0 
                 step_val = 0.1
                 input_format = "%.1f"
             elif teste_curto == "Corrida 12 min":
@@ -215,17 +217,22 @@ else:
     
     if st.sidebar.button("Calcular Resultado do TACF"):
         # Execução do cálculo
-        resultado_final, resultados_avaliacao, indices_minimos = calcular_resultado(tipo_exame, resultados)
+        resultado_final, nota_geral, resultados_avaliacao, indices_minimos, resultados_candidato = calcular_resultado(tipo_exame, resultados)
         
         st.header("Resultado da Avaliação")
         
-        # Exibir o resultado final
-        if resultado_final == "APTO":
-            st.success(f"**Resultado Final: {resultado_final}**")
+        # --- EXIBIÇÃO DA NOTA E STATUS GERAL ---
+        col1, col2 = st.columns(2)
+        
+        # STATUS GERAL
+        if resultado_final == "APTO GERAL":
+            col1.metric("STATUS GERAL", resultado_final)
+            col2.success(f"**NOTA GERAL: {nota_geral}**")
             st.balloons()
         else:
-            st.error(f"**Resultado Final: {resultado_final}**")
-            st.warning("O candidato não atingiu o índice mínimo/máximo exigido em um ou mais testes.")
+            col1.metric("STATUS GERAL", resultado_final)
+            col2.error(f"**NOTA GERAL: {nota_geral}**")
+            st.warning("A reprovação em qualquer teste implica em 'NÃO APTO GERAL' (REPROVADO) no TACF, conforme Art. [span_0](start_span)18, alínea b) da NSCA 54-4/2024.[span_0](end_span)")
 
         st.markdown("---")
         st.subheader("Desempenho por Teste")
@@ -234,24 +241,28 @@ else:
         display_data = []
         for k in ["FEMS", "FTSC", "Corrida 12 min", "C. Cintura"]:
             if k in resultados_avaliacao:
-                valor_resultado = resultados_avaliacao[k].split(" ")[1].replace("(", "").replace(")", "")
+                
+                valor_resultado = resultados_candidato.get(k)
                 valor_limite = indices_minimos[k]
                 
                 if k == "C. Cintura":
                     unidade = "cm"
                     limite_texto = f"Máx: {valor_limite} {unidade}"
+                    resultado_texto = f"Atual: {valor_resultado} {unidade}"
                 elif k == "Corrida 12 min":
                     unidade = "m"
                     limite_texto = f"Mín: {valor_limite} {unidade}"
+                    resultado_texto = f"Atual: {valor_resultado} {unidade}"
                 else:
                     unidade = "repetições"
                     limite_texto = f"Mín: {valor_limite} {unidade}"
+                    resultado_texto = f"Atual: {valor_resultado} {unidade}"
                 
-                avaliacao = resultados_avaliacao[k].split(" ")[0]
+                avaliacao = resultados_avaliacao[k]
 
                 display_data.append({
                     "Teste": TRADUCAO_CAMPOS[k],
-                    "Resultado do Candidato": valor_resultado,
+                    "Resultado do Candidato": resultado_texto,
                     "Índice de Referência": limite_texto,
                     "Avaliação": avaliacao
                 })
