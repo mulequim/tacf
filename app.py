@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 
-# Dados dos índices mínimos de aprovação (Simplificados para "TACF Anual" - Baseado nos menores índices do EAOS/EIOS da NSCA 54-4)
+# Dados dos índices mínimos de aprovação (Simplificados para "TACF Anual" - Baseado nos menores índices do EAOS/EIOS da NSCA 54-4 e incluindo a Circunferência da Cintura do EAT/EIT)
 DADOS_INDICES = {
-    # Usando índices do EAOS e EIOS (Menos exigentes para Oficiais/Praças) como base para o "Anual"
+    # Usando índices do EAOS/EIOS + C. Cintura do EAT/EIT (Grad. Ed. Física)
     "TACF ANUAL MASCULINO (Base EAOS/EIOS)": {
-        "FEMS": 11, "FTSC": 20, "SH": None, "Corrida 12 min": 1890, "C. Cintura": None
+        "FEMS": 11, "FTSC": 20, "SH": None, "Corrida 12 min": 1890, "C. Cintura": 98.0 
     },
     "TACF ANUAL FEMININO (Base EAOS/EIOS)": {
-        "FEMS": 9, "FTSC": 11, "SH": None, "Corrida 12 min": 1540, "C. Cintura": None
+        "FEMS": 9, "FTSC": 11, "SH": None, "Corrida 12 min": 1540, "C. Cintura": 89.0
     },
 }
 
@@ -59,6 +59,17 @@ def calcular_resultado(tipo_exame, resultados_candidato):
             resultados_avaliacao["Corrida 12 min"] = f"NÃO APTO ({res_corrida} m). Mínimo exigido: {min_corrida} m."
             aprovado_geral = False
             
+    # 4. Circunferência da Cintura (C. Cintura)
+    # Importante: O índice é o MÁXIMO (<=).
+    max_cintura = indices_minimos.get("C. Cintura")
+    res_cintura = resultados_candidato.get("C. Cintura", 999.0) # Assume um valor alto para caso não seja preenchido
+    if max_cintura is not None:
+        if res_cintura <= max_cintura:
+            resultados_avaliacao["C. Cintura"] = f"APTO ({res_cintura} cm)"
+        else:
+            resultados_avaliacao["C. Cintura"] = f"NÃO APTO ({res_cintura} cm). Máximo permitido: {max_cintura} cm."
+            aprovado_geral = False
+            
     # Resultado final
     resultado_final = "APTO" if aprovado_geral else "NÃO APTO"
     
@@ -73,7 +84,7 @@ st.set_page_config(
 )
 
 st.title("Avaliação do Teste de Condicionamento Físico (TACF) COMAER")
-st.subheader("Baseado nos Índices Mínimos da NSCA 54-4/2024")
+st.subheader("Baseado nos Índices Mínimos da NSCA 54-4/2024 (Exames de Admissão)")
 st.markdown("---")
 
 # --- Lógica do Menu ---
@@ -120,7 +131,7 @@ if opcao_selecionada == "TACF GERAL (Tabelas de Índices)":
                 TRADUCAO_CAMPOS["FTSC"]: indices["FTSC"] if indices["FTSC"] is not None else "-",
                 TRADUCAO_CAMPOS["SH"]: indices["SH"] if indices["SH"] is not None else "-",
                 TRADUCAO_CAMPOS["Corrida 12 min"]: indices["Corrida 12 min"] if indices["Corrida 12 min"] is not None else "-",
-                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']}" if indices["C. Cintura"] is not None else "-",
+                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']} cm" if indices["C. Cintura"] is not None else "-",
             })
         elif "(F)" in nome_exame:
             df_geral_f.append({
@@ -129,7 +140,7 @@ if opcao_selecionada == "TACF GERAL (Tabelas de Índices)":
                 TRADUCAO_CAMPOS["FTSC"]: indices["FTSC"] if indices["FTSC"] is not None else "-",
                 TRADUCAO_CAMPOS["SH"]: indices["SH"] if indices["SH"] is not None else "-",
                 TRADUCAO_CAMPOS["Corrida 12 min"]: indices["Corrida 12 min"] if indices["Corrida 12 min"] is not None else "-",
-                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']}" if indices["C. Cintura"] is not None else "-",
+                TRADUCAO_CAMPOS["C. Cintura"]: f"≤ {indices['C. Cintura']} cm" if indices["C. Cintura"] is not None else "-",
             })
 
     st.subheader("Índices Mínimos - Sexo MASCULINO")
@@ -144,12 +155,12 @@ else:
     # --- CALCULAR DESEMPENHO TACF ANUAL SIMPLIFICADO ---
     
     st.header("Calcular Desempenho no TACF Anual (Simplificado)")
-    st.warning("Aviso: Esta calculadora utiliza os índices mais básicos (EAOS/EIOS) encontrados na NSCA 54-4/2024 para simular um TACF Anual. Os critérios reais do TACF Anual do Efetivo podem variar e dependem da Tabela de Fator de Idade, que NÃO está presente nesta norma.")
+    st.warning("**Atenção:** Esta calculadora é baseada na **NSCA 54-4/2024 (Exames de Admissão)**. Os índices **NÃO consideram a idade** do candidato. O TACF Anual (Efetivo) é regido por outra norma (NSCA 54-3) que varia por idade.")
     
-    st.sidebar.header("2. Selecione o Sexo/Padrão")
+    st.sidebar.header("2. Selecione o Padrão")
     opcoes_exame = sorted(list(DADOS_INDICES.keys()))
     tipo_exame = st.sidebar.selectbox(
-        "Selecione o Padrão de Cálculo:",
+        "Selecione o Sexo/Padrão de Cálculo:",
         opcoes_exame,
         index=0 # Default para Masculino
     )
@@ -161,26 +172,44 @@ else:
 
     resultados = {}
 
-    # Campos de entrada de dados: FEMS, FTSC, Corrida 12 min
+    # Campos de entrada de dados
     for teste_curto, min_valor in indices_necessarios.items():
         if min_valor is not None:
             label = TRADUCAO_CAMPOS[teste_curto]
             
             # Determina o valor inicial para o input
-            initial_value = int(min_valor)
-            if teste_curto == "Corrida 12 min":
+            if teste_curto == "C. Cintura":
+                initial_value = min_valor - 1.0 # Valor abaixo do máximo
+                step_val = 0.1
+                input_format = "%.1f"
+            elif teste_curto == "Corrida 12 min":
+                initial_value = int(min_valor)
                 step_val = 10
+                input_format = "%d"
             else:
+                initial_value = int(min_valor)
                 step_val = 1
+                input_format = "%d"
 
-            # Repetições e Distância (número inteiro)
-            resultados[teste_curto] = st.sidebar.number_input(
-                label,
-                min_value=0,
-                value=initial_value,
-                step=step_val,
-                help=f"Mínimo exigido: {min_valor} " + ("m." if teste_curto == "Corrida 12 min" else "repetições.")
-            )
+            # Repetições, Distância ou Circunferência
+            if teste_curto == "C. Cintura":
+                resultados[teste_curto] = st.sidebar.number_input(
+                    label,
+                    min_value=0.0,
+                    value=initial_value,
+                    step=step_val,
+                    format=input_format,
+                    help=f"Máximo permitido: {min_valor} cm. (Base EAT/EIT)"
+                )
+            else:
+                resultados[teste_curto] = st.sidebar.number_input(
+                    label,
+                    min_value=0,
+                    value=initial_value,
+                    step=step_val,
+                    format=input_format,
+                    help=f"Mínimo exigido: {min_valor} " + ("m." if teste_curto == "Corrida 12 min" else "repetições.")
+                )
         
     st.sidebar.markdown("---")
     
@@ -196,24 +225,34 @@ else:
             st.balloons()
         else:
             st.error(f"**Resultado Final: {resultado_final}**")
-            st.warning("O candidato não atingiu o índice mínimo exigido em um ou mais testes.")
+            st.warning("O candidato não atingiu o índice mínimo/máximo exigido em um ou mais testes.")
 
         st.markdown("---")
         st.subheader("Desempenho por Teste")
         
         # Prepara a lista de resultados e índices para exibição
         display_data = []
-        for k in ["FEMS", "FTSC", "Corrida 12 min"]:
+        for k in ["FEMS", "FTSC", "Corrida 12 min", "C. Cintura"]:
             if k in resultados_avaliacao:
                 valor_resultado = resultados_avaliacao[k].split(" ")[1].replace("(", "").replace(")", "")
-                valor_minimo = indices_minimos[k]
-                unidade = "m" if k == "Corrida 12 min" else "repetições"
+                valor_limite = indices_minimos[k]
+                
+                if k == "C. Cintura":
+                    unidade = "cm"
+                    limite_texto = f"Máx: {valor_limite} {unidade}"
+                elif k == "Corrida 12 min":
+                    unidade = "m"
+                    limite_texto = f"Mín: {valor_limite} {unidade}"
+                else:
+                    unidade = "repetições"
+                    limite_texto = f"Mín: {valor_limite} {unidade}"
+                
                 avaliacao = resultados_avaliacao[k].split(" ")[0]
 
                 display_data.append({
                     "Teste": TRADUCAO_CAMPOS[k],
                     "Resultado do Candidato": valor_resultado,
-                    "Índice Mínimo (Mín: )": f"{valor_minimo} {unidade}",
+                    "Índice de Referência": limite_texto,
                     "Avaliação": avaliacao
                 })
 
@@ -236,6 +275,7 @@ else:
 st.markdown("---")
 st.caption("""
     **Aviso de Limitação:** Esta ferramenta utiliza a **NSCA 54-4/2024**, que trata de **Exames de Admissão/Seleção**.
+    Os critérios de referência para o **TACF Anual Simplificado** são baseados nos índices **menos exigentes** desta norma (EAOS/EIOS para exercícios e EAT/EIT para C. Cintura).
     O **TACF Anual do Efetivo** (militar de carreira) é regido pela **NSCA 54-3** e considera a **Idade**, o que altera os índices mínimos.
-    [span_0](start_span)[span_1](start_span)A opção **"Calcular TACF Anual (Simplificado)"** usa os índices mínimos de EAOS/EIOS[span_0](end_span)[span_1](end_span) da NSCA 54-4 por simplicidade, e **não deve ser usada como referência oficial** para o TACF Anual do Efetivo.
+    **Não há variação de índices por idade nesta ferramenta**, pois ela se baseia na NSCA 54-4.
 """)
